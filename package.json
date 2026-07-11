@@ -1,0 +1,19 @@
+{
+  "name": "app-attendance-root",
+  "version": "1.0.0",
+  "description": "Root workspace package.json for attendance system",
+  "type": "module",
+  "scripts": {
+    "start": "npm --prefix back start",
+    "dev": "npm --prefix back run dev",
+    "install:all": "npm --prefix back install"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.0.0-beta.3",
+    "jsonwebtoken": "^9.0.2",
+    "sqlite3": "^5.1.7"
+  }
+}

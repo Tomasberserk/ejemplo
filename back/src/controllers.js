@@ -1,0 +1,676 @@
+import { run, get, query } from './db.js';
+import crypto from 'crypto';
+
+// Helper to get client IP
+const getClientIp = (req) => {
+  const xForwardedFor = req.headers['x-forwarded-for'];
+  if (xForwardedFor) {
+    return xForwardedFor.split(',')[0].trim();
+  }
+  return req.socket.remoteAddress || req.ip;
+};
+
+// QR Token generator based on 15-second blocks
+export const generateQrToken = (sessionId, timeOffset = 0) => {
+  const blockIndex = Math.floor((Date.now() + timeOffset) / 15000);
+  return crypto
+    .createHmac('sha256', 'qr-rotation-salt')
+    .update(`${sessionId}_${blockIndex}`)
+    .digest('hex')
+    .substring(0, 12);
+};
+
+// Check if two IPs are on the same subnet or sharing NAT
+const checkSameSubnetOrIp = (ip1, ip2) => {
+  if (!ip1 || !ip2) return false;
+  
+  // Local dev bypass
+  const localips = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+  if (localips.includes(ip1) || localips.includes(ip2)) {
+    return true;
+  }
+  
+  const norm1 = ip1.replace('::ffff:', '');
+  const norm2 = ip2.replace('::ffff:', '');
+  
+  if (norm1 === norm2) return true;
+  
+  // Subnet /24 check
+  const parts1 = norm1.split('.');
+  const parts2 = norm2.split('.');
+  if (parts1.length === 4 && parts2.length === 4) {
+    return parts1[0] === parts2[0] && parts1[1] === parts2[1] && parts1[2] === parts2[2];
+  }
+  
+  return false;
+};
+
+// Catalog Controllers
+export const getInstitutions = async (req, res) => {
+  try {
+    const rows = await query('SELECT * FROM institutions WHERE active = 1');
+    res.json({ data: rows.map(r => ({ ...r, labels: JSON.parse(r.labels), theme: JSON.parse(r.theme) })) });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const getUnits = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+    const rows = await query('SELECT * FROM academic_units WHERE institution_id = ? AND active = 1', [institutionId]);
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const getPeople = async (req, res) => {
+  try {
+    const { unitId } = req.params;
+    const rows = await query(`
+      SELECT p.id, p.documento, p.nombre, p.matricula, p.roles
+      FROM people p
+      JOIN enrollments e ON p.id = e.person_id
+      WHERE e.unit_id = ? AND e.active = 1 AND p.active = 1
+    `, [unitId]);
+    res.json({ data: rows.map(r => ({ ...r, roles: JSON.parse(r.roles) })) });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Room Controllers
+export const createRoom = async (req, res) => {
+  try {
+    const { institutionId, unitId, qrTtlMinutes = 15 } = req.body;
+    if (!institutionId || !unitId) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'institutionId y unitId son requeridos.' } });
+    }
+
+    // Check if unit belongs to institution and contains people
+    const unit = await get('SELECT * FROM academic_units WHERE id = ? AND institution_id = ?', [unitId, institutionId]);
+    if (!unit) {
+      return res.status(400).json({ error: { code: 'UNIT_INSTITUTION_MISMATCH', message: 'Ficha no pertenece a la institución.' } });
+    }
+
+    const countPeople = await get(`
+      SELECT COUNT(*) as count FROM enrollments WHERE unit_id = ? AND active = 1
+    `, [unitId]);
+    if (countPeople.count === 0) {
+      return res.status(400).json({ error: { code: 'UNIT_EMPTY', message: 'La ficha no tiene aprendices inscritos.' } });
+    }
+
+    const sessionId = `sala_${Date.now()}`;
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 15 * 60000); // Strict 15 mins room timer
+    const creatorIp = getClientIp(req);
+
+    await run(`
+      INSERT INTO attendance_sessions (
+        id, institution_id, unit_id, status, qr_token, qr_expires_at, qr_ttl_minutes,
+        activated_at, room_created_at, room_expires_at, is_reopened, creator_ip
+      ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, ?)
+    `, [
+      sessionId, institutionId, unitId,
+      generateQrToken(sessionId, 0),
+      expiresAt.toISOString(),
+      qrTtlMinutes,
+      now.toISOString(),
+      now.toISOString(),
+      expiresAt.toISOString(),
+      creatorIp
+    ]);
+
+    const createdSession = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    res.status(201).json({ data: createdSession });
+  } catch (err) {
+    console.error('Error creating room:', err);
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const createSessionDraft = async (req, res) => {
+  // Alias or direct creation
+  return createRoom(req, res);
+};
+
+export const activateSession = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    if (!session) {
+      return res.status(404).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada.' } });
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 15 * 60000);
+    const creatorIp = getClientIp(req);
+
+    await run(`
+      UPDATE attendance_sessions
+      SET status = 'active', activated_at = ?, room_created_at = ?, room_expires_at = ?, is_reopened = 0, creator_ip = ?, qr_token = ?
+      WHERE id = ?
+    `, [
+      now.toISOString(),
+      now.toISOString(),
+      expiresAt.toISOString(),
+      creatorIp,
+      generateQrToken(sessionId, 0),
+      sessionId
+    ]);
+
+    const updated = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    res.json({ data: updated });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const closeSession = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    if (!session) {
+      return res.status(404).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada.' } });
+    }
+
+    const now = new Date();
+    await run(`
+      UPDATE attendance_sessions
+      SET status = 'closed', closed_at = ?
+      WHERE id = ?
+    `, [now.toISOString(), sessionId]);
+
+    const updated = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    res.json({ data: updated });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const reopenRoom = async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'sessionId es requerido.' } });
+    }
+
+    const session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    if (!session) {
+      return res.status(404).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada.' } });
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 15 * 60000); // 15 mins for checkout
+    const creatorIp = getClientIp(req);
+
+    await run(`
+      UPDATE attendance_sessions
+      SET status = 'active', room_expires_at = ?, is_reopened = 1, creator_ip = ?
+      WHERE id = ?
+    `, [expiresAt.toISOString(), creatorIp, sessionId]);
+
+    const updated = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    res.json({ data: updated, message: 'Sala reabierta para registrar salida.' });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const getSession = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    if (!session) {
+      return res.status(404).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada.' } });
+    }
+    
+    // Add current rotation token to check
+    session.currentQrToken = generateQrToken(sessionId, 0);
+    session.qrRotationSec = 15 - Math.floor((Date.now() % 15000) / 1000);
+
+    res.json({ data: session });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const getSessionQrToken = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    res.json({
+      qrToken: generateQrToken(sessionId, 0),
+      expiresSec: 15 - Math.floor((Date.now() % 15000) / 1000)
+    });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const getSessionsHistory = async (req, res) => {
+  try {
+    const rows = await query('SELECT * FROM attendance_sessions ORDER BY room_created_at DESC LIMIT 50');
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Check-in logic
+export const checkin = async (req, res) => {
+  try {
+    const { documento, qrToken, sessionId: bodySessionId } = req.body;
+    const pathToken = req.params.token; // From GET/POST /public/attendance/:token/register
+    const token = qrToken || pathToken;
+
+    if (!documento || !token) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento y token de QR son requeridos.' } });
+    }
+
+    // Find the session that has this token active or find by session id if supplied
+    let session;
+    if (bodySessionId) {
+      session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [bodySessionId]);
+    } else {
+      // Find session by matching rotating token
+      // We look for active sessions
+      const activeSessions = await query("SELECT * FROM attendance_sessions WHERE status = 'active'");
+      for (const s of activeSessions) {
+        const tok0 = generateQrToken(s.id, 0);
+        const tok1 = generateQrToken(s.id, -15000); // 15s leeway
+        const tok2 = generateQrToken(s.id, 15000);
+        if (token === tok0 || token === tok1 || token === tok2) {
+          session = s;
+          break;
+        }
+      }
+    }
+
+    if (!session) {
+      return res.status(400).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada o token QR inválido/vencido.' } });
+    }
+
+    // Validations: Closed Session
+    if (session.status === 'closed') {
+      return res.status(400).json({ error: { code: 'SESSION_CLOSED', message: 'La sala está cerrada por el instructor.' } });
+    }
+
+    // Validations: Room Expiration (15 minutes)
+    const now = new Date();
+    const roomExpires = new Date(session.room_expires_at);
+    if (now > roomExpires) {
+      return res.status(400).json({ error: { code: 'ROOM_EXPIRED', message: 'La ventana de 15 minutos ha cerrado. No se admiten registros.' } });
+    }
+
+    // Find person
+    const person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [documento]);
+    if (!person) {
+      // Record rejected attempt in DB
+      await run(`
+        INSERT INTO attendance_records (
+          id, session_id, institution_id, unit_id, documento, status, reject_reason, message, created_at, client_ip
+        ) VALUES (?, ?, ?, ?, ?, 'rejected', 'PERSON_NOT_FOUND', ?, ?, ?)
+      `, [`rec_${Date.now()}`, session.id, session.institution_id, session.unit_id, documento, 'Persona no encontrada en el sistema.', now.toISOString(), getClientIp(req)]);
+
+      return res.status(404).json({ error: { code: 'PERSON_NOT_FOUND', message: 'El aprendiz no está registrado.' } });
+    }
+
+    // Check if enrolled in this academic unit
+    const enrollment = await get('SELECT * FROM enrollments WHERE unit_id = ? AND person_id = ? AND active = 1', [session.unit_id, person.id]);
+    if (!enrollment) {
+      await run(`
+        INSERT INTO attendance_records (
+          id, session_id, institution_id, unit_id, person_id, documento, status, reject_reason, message, created_at, client_ip
+        ) VALUES (?, ?, ?, ?, ?, ?, 'rejected', 'NOT_ENROLLED', ?, ?, ?)
+      `, [`rec_${Date.now()}`, session.id, session.institution_id, session.unit_id, person.id, documento, 'Aprendiz no está inscrito en esta ficha.', now.toISOString(), getClientIp(req)]);
+
+      return res.status(400).json({ error: { code: 'NOT_ENROLLED', message: 'El aprendiz no pertenece a esta ficha.' } });
+    }
+
+    // SECURITY CHECK: Subnet LAN / Client IP match
+    const clientIp = getClientIp(req);
+    const creatorIp = session.creator_ip;
+    const bypassIp = process.env.BYPASS_IP_CHECK === 'true';
+
+    if (!bypassIp && !checkSameSubnetOrIp(clientIp, creatorIp)) {
+      await run(`
+        INSERT INTO attendance_records (
+          id, session_id, institution_id, unit_id, person_id, documento, status, reject_reason, message, created_at, client_ip
+        ) VALUES (?, ?, ?, ?, ?, ?, 'rejected', 'OUT_OF_SUBNET', ?, ?, ?)
+      `, [`rec_${Date.now()}`, session.id, session.institution_id, session.unit_id, person.id, documento, 'Fuera del rango local / Subred del docente.', now.toISOString(), clientIp]);
+
+      return res.status(400).json({
+        error: {
+          code: 'OUT_OF_SUBNET',
+          message: 'Tu dispositivo no está conectado a la misma subred local que el docente. Por favor conéctate al WiFi del aula.'
+        }
+      });
+    }
+
+    // Check for duplicate entry/exit
+    const existingRecord = await get(`
+      SELECT * FROM attendance_records 
+      WHERE session_id = ? AND person_id = ? AND status != 'rejected'
+    `, [session.id, person.id]);
+
+    if (session.is_reopened === 1) {
+      // Checkout phase
+      if (!existingRecord) {
+        return res.status(400).json({ error: { code: 'NO_ENTRY_RECORD', message: 'No se puede registrar salida sin haber registrado entrada primero.' } });
+      }
+
+      if (existingRecord.hora_salida_real) {
+        return res.status(400).json({ error: { code: 'DUPLICATE_EXIT', message: 'Ya has registrado tu salida para esta clase.' } });
+      }
+
+      // Update record with checkout time
+      const horaSalida = now.toTimeString().split(' ')[0];
+      await run(`
+        UPDATE attendance_records
+        SET hora_salida_real = ?
+        WHERE id = ?
+      `, [horaSalida, existingRecord.id]);
+
+      const updatedRecord = await get('SELECT * FROM attendance_records WHERE id = ?', [existingRecord.id]);
+      return res.json({ data: updatedRecord, message: 'Salida registrada correctamente.' });
+
+    } else {
+      // Entry phase
+      if (existingRecord) {
+        return res.status(400).json({ error: { code: 'DUPLICATE_ENTRY', message: 'Ya registraste tu ingreso a esta clase.' } });
+      }
+
+      // Calculate fractional attendance
+      const activatedTime = new Date(session.activated_at);
+      const minutesElapsed = Math.floor((now.getTime() - activatedTime.getTime()) / 60000);
+
+      const horasProgramadas = 6;
+      let horasAsistidas = 6;
+      let horasFalla = 0;
+      let tipoRegistro = 'REGULAR';
+      let status = 'accepted';
+
+      if (minutesElapsed <= 15) {
+        // Punctuality window
+        horasAsistidas = 6;
+        horasFalla = 0;
+        tipoRegistro = 'REGULAR';
+        status = 'accepted';
+      } else {
+        // Late block discount
+        const hoursMissed = Math.min(horasProgramadas, Math.ceil(minutesElapsed / 60));
+        horasAsistidas = horasProgramadas - hoursMissed;
+        horasFalla = hoursMissed;
+        tipoRegistro = `RETARDO_BLOQUE_${hoursMissed}`;
+        status = 'ASISTENCIA_PARCIAL';
+      }
+
+      const recId = `ast_${Date.now().toString().substring(5)}`;
+      const horaIngreso = now.toTimeString().split(' ')[0];
+      const fecha = now.toISOString().split('T')[0];
+
+      await run(`
+        INSERT INTO attendance_records (
+          id, session_id, institution_id, unit_id, person_id, documento, status, message,
+          hora_ingreso_real, horas_programadas_sesion, horas_validadas_asistencia, horas_inasistencia_acumulada,
+          tipo_registro, created_at, client_ip
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        recId, session.id, session.institution_id, session.unit_id, person.id, documento, status,
+        horasFalla > 0 ? `Llegada tarde. Se penaliza con ${horasFalla} hora(s) de inasistencia.` : 'Asistencia puntual registrada.',
+        horaIngreso, horasProgramadas, horasAsistidas, horasFalla, tipoRegistro, now.toISOString(), clientIp
+      ]);
+
+      const savedRecord = await get('SELECT * FROM attendance_records WHERE id = ?', [recId]);
+      return res.status(200).json({ data: savedRecord });
+    }
+  } catch (err) {
+    console.error('Check-in error:', err);
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Manual override by Teacher
+export const manualOverride = async (req, res) => {
+  try {
+    const { sessionId, documento, horas_validadas_asistencia = 6, horas_inasistencia_acumulada = 0, tipo_registro = 'MANUAL_OVERRIDE' } = req.body;
+    if (!sessionId || !documento) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'sessionId y documento son requeridos.' } });
+    }
+
+    const session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    if (!session) {
+      return res.status(404).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada.' } });
+    }
+
+    const person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [documento]);
+    if (!person) {
+      return res.status(404).json({ error: { code: 'PERSON_NOT_FOUND', message: 'Persona no encontrada.' } });
+    }
+
+    const now = new Date();
+    const recId = `ast_man_${Date.now().toString().substring(8)}`;
+    
+    // Check if record exists to update it, or insert new one
+    const existing = await get('SELECT * FROM attendance_records WHERE session_id = ? AND person_id = ?', [sessionId, person.id]);
+    
+    if (existing) {
+      await run(`
+        UPDATE attendance_records
+        SET status = 'PRESENTE',
+            horas_validadas_asistencia = ?,
+            horas_inasistencia_acumulada = ?,
+            tipo_registro = ?,
+            message = 'Corregido manualmente por el instructor.'
+        WHERE id = ?
+      `, [horas_validadas_asistencia, horas_inasistencia_acumulada, tipo_registro, existing.id]);
+      
+      const updated = await get('SELECT * FROM attendance_records WHERE id = ?', [existing.id]);
+      return res.json({ data: updated, message: 'Registro actualizado por corrección manual.' });
+    } else {
+      const horaIngreso = now.toTimeString().split(' ')[0];
+      await run(`
+        INSERT INTO attendance_records (
+          id, session_id, institution_id, unit_id, person_id, documento, status, message,
+          hora_ingreso_real, horas_programadas_sesion, horas_validadas_asistencia, horas_inasistencia_acumulada,
+          tipo_registro, created_at, client_ip
+        ) VALUES (?, ?, ?, ?, ?, ?, 'PRESENTE', 'Ingreso manual justificado por el instructor.', ?, 6, ?, ?, ?, ?, 'override')
+      `, [
+        recId, sessionId, session.institution_id, session.unit_id, person.id, documento,
+        horaIngreso, horas_validadas_asistencia, horas_inasistencia_acumulada, tipo_registro, now.toISOString()
+      ]);
+      
+      const saved = await get('SELECT * FROM attendance_records WHERE id = ?', [recId]);
+      return res.json({ data: saved, message: 'Ingreso manual registrado.' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Manual Late Check-in (Teacher clicks 'Ingreso Retardado' for student)
+export const manualLateCheckin = async (req, res) => {
+  try {
+    const { sessionId, documento } = req.body;
+    if (!sessionId || !documento) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'sessionId y documento son requeridos.' } });
+    }
+
+    const session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    if (!session) {
+      return res.status(404).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada.' } });
+    }
+
+    const person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [documento]);
+    if (!person) {
+      return res.status(404).json({ error: { code: 'PERSON_NOT_FOUND', message: 'Persona no encontrada.' } });
+    }
+
+    const now = new Date();
+    
+    // Check if record already exists
+    const existing = await get("SELECT * FROM attendance_records WHERE session_id = ? AND person_id = ? AND status != 'rejected'", [sessionId, person.id]);
+    if (existing) {
+      return res.status(400).json({ error: { code: 'DUPLICATE_ENTRY', message: 'El aprendiz ya tiene un registro de asistencia válido.' } });
+    }
+
+    // Calculate fraction based on current time
+    const activatedTime = new Date(session.activated_at);
+    const minutesElapsed = Math.floor((now.getTime() - activatedTime.getTime()) / 60000);
+
+    const horasProgramadas = 6;
+    let horasAsistidas = 6;
+    let horasFalla = 0;
+    let tipoRegistro = 'REGULAR';
+    let status = 'accepted';
+
+    if (minutesElapsed <= 15) {
+      horasAsistidas = 6;
+      horasFalla = 0;
+      tipoRegistro = 'REGULAR';
+      status = 'accepted';
+    } else {
+      const hoursMissed = Math.min(horasProgramadas, Math.ceil(minutesElapsed / 60));
+      horasAsistidas = horasProgramadas - hoursMissed;
+      horasFalla = hoursMissed;
+      tipoRegistro = `RETARDO_BLOQUE_${hoursMissed}`;
+      status = 'ASISTENCIA_PARCIAL';
+    }
+
+    const recId = `ast_man_late_${Date.now().toString().substring(8)}`;
+    const horaIngreso = now.toTimeString().split(' ')[0];
+
+    await run(`
+      INSERT INTO attendance_records (
+        id, session_id, institution_id, unit_id, person_id, documento, status, message,
+        hora_ingreso_real, horas_programadas_sesion, horas_validadas_asistencia, horas_inasistencia_acumulada,
+        tipo_registro, created_at, client_ip
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'override-late')
+    `, [
+      recId, sessionId, session.institution_id, session.unit_id, person.id, documento, status,
+      `Ingreso retardado manual. Horas de falla: ${horasFalla}.`,
+      horaIngreso, horasProgramadas, horasAsistidas, horasFalla, tipoRegistro, now.toISOString()
+    ]);
+
+    const saved = await get('SELECT * FROM attendance_records WHERE id = ?', [recId]);
+    return res.json({ data: saved, message: 'Ingreso retardado manual registrado con éxito.' });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Real-time details
+export const getPresent = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const rows = await query(`
+      SELECT r.*, p.nombre
+      FROM attendance_records r
+      JOIN people p ON r.person_id = p.id
+      WHERE r.session_id = ? AND r.status IN ('accepted', 'ASISTENCIA_PARCIAL', 'PRESENTE')
+    `, [sessionId]);
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const getAbsent = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    if (!session) {
+      return res.status(404).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada.' } });
+    }
+
+    // Absents are people enrolled in the unit that don't have an accepted record
+    const rows = await query(`
+      SELECT p.id, p.documento, p.nombre, p.matricula
+      FROM people p
+      JOIN enrollments e ON p.id = e.person_id
+      WHERE e.unit_id = ? AND e.active = 1 AND p.active = 1
+      AND p.id NOT IN (
+        SELECT person_id FROM attendance_records
+        WHERE session_id = ? AND status IN ('accepted', 'ASISTENCIA_PARCIAL', 'PRESENTE')
+      )
+    `, [session.unit_id, sessionId]);
+    
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const getRejections = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const rows = await query(`
+      SELECT * FROM attendance_records
+      WHERE session_id = ? AND status = 'rejected'
+      ORDER BY created_at DESC
+    `, [sessionId]);
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Session report (Rule 3)
+export const getSessionReport = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    if (!session) {
+      return res.status(404).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada.' } });
+    }
+
+    // Get all enrolled people
+    const enrolled = await query(`
+      SELECT p.id, p.documento, p.nombre
+      FROM people p
+      JOIN enrollments e ON p.id = e.person_id
+      WHERE e.unit_id = ? AND e.active = 1 AND p.active = 1
+    `, [session.unit_id]);
+
+    // Get all records for this session
+    const records = await query(`
+      SELECT * FROM attendance_records WHERE session_id = ? AND status != 'rejected'
+    `, [sessionId]);
+
+    const recordMap = new Map(records.map(r => [r.person_id, r]));
+    const horasProgramadas = 6;
+
+    const report = enrolled.map(p => {
+      const rec = recordMap.get(p.id);
+      
+      let horasAsistidas = 0;
+      let horasFalla = horasProgramadas;
+      let tipoRegistro = 'FALLA_TOTAL';
+      let porcentajeAsistencia = 0.0;
+
+      if (rec) {
+        horasAsistidas = rec.horas_validadas_asistencia;
+        horasFalla = rec.horas_inasistencia_acumulada;
+        tipoRegistro = rec.tipo_registro;
+        porcentajeAsistencia = parseFloat(((horasAsistidas / horasProgramadas) * 100).toFixed(2));
+      }
+
+      return {
+        documento: p.documento,
+        nombre: p.nombre,
+        horas_programadas: horasProgramadas,
+        horas_asistidas: horasAsistidas,
+        horas_falla: horasFalla,
+        porcentaje_asistencia: porcentajeAsistencia,
+        tipo_registro: tipoRegistro,
+        hora_ingreso: rec ? rec.hora_ingreso_real : '-',
+        hora_salida: rec ? (rec.hora_salida_real || '-') : '-'
+      };
+    });
+
+    res.json(report);
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel del Instructor - Asistencias QR SENA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- QR Code Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: #0b0f17;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(57, 169, 0, 0.05) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(0, 48, 73, 0.1) 0px, transparent 50%);
+    }
+    .glass {
+      background: rgba(30, 41, 59, 0.45);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-100 flex flex-col">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-9 w-9 bg-[#39A900] rounded-xl flex items-center justify-center font-bold text-white shadow-lg shadow-[#39A900]/20">
+          S
+        </div>
+        <div>
+          <span class="font-bold tracking-tight text-lg">Asistencias QR</span>
+          <span class="text-xs text-slate-400 block -mt-1 font-medium">Instructor SENA</span>
+        </div>
+      </div>
+      
+      <!-- API status & User controls -->
+      <div class="flex items-center gap-4">
+        <!-- API URL Config -->
+        <div class="flex items-center gap-2 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800 text-xs">
+          <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse" id="apiStatusDot"></span>
+          <input 
+            type="text" 
+            id="apiUrlInput" 
+            value="http://localhost:4000" 
+            class="bg-transparent border-none text-slate-300 w-36 focus:outline-none font-mono"
+            placeholder="URL del Servidor"
+          >
+        </div>
+
+        <div id="userInfo" class="hidden flex items-center gap-3">
+          <div class="text-right">
+            <span class="text-sm font-semibold block text-slate-200" id="userName">Jesús González</span>
+            <span class="text-[10px] text-[#39A900] font-bold tracking-wider uppercase" id="userRole">INSTRUCTOR</span>
+          </div>
+          <button id="btnLogout" class="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-red-400 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl mx-auto px-6 py-8 w-full flex flex-col">
+
+    <!-- LOGIN SCREEN -->
+    <section id="loginScreen" class="flex-1 flex items-center justify-center py-12">
+      <div class="w-full max-w-md glass rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+        <!-- Blur ornaments -->
+        <div class="absolute -top-10 -right-10 w-32 h-32 bg-[#39A900]/10 rounded-full blur-2xl"></div>
+        <div class="absolute -bottom-10 -left-10 w-32 h-32 bg-[#003049]/20 rounded-full blur-2xl"></div>
+
+        <div class="text-center mb-8 relative z-10">
+          <h2 class="text-2xl font-bold tracking-tight">Acceso Instructores</h2>
+          <p class="text-slate-400 text-sm mt-1">Ingrese sus datos para gestionar salas de asistencia</p>
+        </div>
+
+        <div id="loginFeedback" class="hidden mb-4 p-3 rounded-xl text-xs font-semibold text-center bg-red-500/10 text-red-400 border border-red-500/20"></div>
+
+        <form id="loginForm" class="space-y-5 relative z-10">
+          <div>
+            <label for="loginDoc" class="block text-xs font-medium text-slate-400 mb-1.5">Documento de Identidad</label>
+            <input 
+              type="text" 
+              id="loginDoc" 
+              required 
+              value="1079606375"
+              class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#39A900] focus:border-transparent transition-all"
+              placeholder="Ej: 1079606375"
+            >
+          </div>
+          <div>
+            <label for="loginPassword" class="block text-xs font-medium text-slate-400 mb-1.5">Contraseña</label>
+            <input 
+              type="password" 
+              id="loginPassword" 
+              required 
+              value="1079606375"
+              class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#39A900] focus:border-transparent transition-all"
+              placeholder="••••••••"
+            >
+          </div>
+          <button 
+            type="submit" 
+            class="w-full bg-[#39A900] hover:bg-[#329200] text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-[#39A900]/10 flex items-center justify-center gap-2"
+          >
+            <span>Iniciar Sesión</span>
+          </button>
+        </form>
+        
+        <div class="mt-6 text-center text-xs text-slate-500 relative z-10">
+          Instructor dev: <code class="bg-slate-950 px-1 py-0.5 rounded text-[#39A900]">1079606375 / 1079606375</code>
+        </div>
+      </div>
+    </section>
+
+    <!-- INSTRUCTOR DASHBOARD -->
+    <section id="dashboardScreen" class="hidden flex-1 flex flex-col gap-6">
+      
+      <!-- Top Overview Bar -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 glass rounded-2xl p-6">
+        <div>
+          <span class="text-xs text-slate-400 font-semibold tracking-wider uppercase">Sesión de Aprendizaje</span>
+          <h2 class="text-2xl font-bold tracking-tight text-white mt-0.5" id="activeFichaName">Seleccione una Ficha para Iniciar</h2>
+        </div>
+        
+        <!-- Tab navigation -->
+        <div class="flex bg-slate-950/60 p-1 rounded-xl border border-slate-800/80">
+          <button id="btnTabControl" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-[#39A900] text-white transition-all">
+            Sala de Asistencia
+          </button>
+          <button id="btnTabReport" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all">
+            Reporte de Jornada
+          </button>
+        </div>
+      </div>
+
+      <!-- MAIN TABS CONTENT -->
+      <div class="flex-1 flex flex-col lg:flex-row gap-6">
+
+        <!-- TAB 1: SALA DE ASISTENCIA (Split panel: Left controller, Right Real-time view) -->
+        <div id="tabContentControl" class="w-full flex flex-col lg:flex-row gap-6 flex-1">
+          
+          <!-- LEFT PANEL: Session & QR Code controller -->
+          <div class="w-full lg:w-96 flex flex-col gap-6">
+            
+            <!-- Setup & Control Card -->
+            <div class="glass rounded-3xl p-6 flex flex-col gap-5 relative overflow-hidden">
+              <h3 class="text-base font-bold text-white border-b border-slate-800/60 pb-3">Controles de Sala</h3>
+              
+              <!-- Setup Session Form (shown when no session active) -->
+              <div id="sessionSetupForm" class="space-y-4">
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1.5">Ficha de Formación</label>
+                  <select id="selectFicha" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#39A900]">
+                    <option value="">Cargando fichas...</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1.5">Duración del QR (Minutos)</label>
+                  <input type="number" id="inputQrTtl" value="15" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#39A900]">
+                </div>
+                <button id="btnCreateRoom" class="w-full bg-[#39A900] hover:bg-[#329200] text-white font-semibold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+                  <span>Abrir Sala de Clase</span>
+                </button>
+              </div>
+
+              <!-- Active Session Controller (shown when active) -->
+              <div id="activeSessionController" class="hidden space-y-5">
+                <!-- Room Timer & Status -->
+                <div class="bg-slate-950/40 p-4 rounded-2xl border border-slate-800/80 flex items-center justify-between">
+                  <div>
+                    <span class="text-[10px] text-slate-400 uppercase tracking-wider block">Sala Expira En</span>
+                    <span class="text-2xl font-bold font-mono tracking-tight text-white" id="roomCountdown">15:00</span>
+                  </div>
+                  <div class="text-right">
+                    <span id="roomStatusBadge" class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-500/10 text-green-400 border border-green-500/20">ACTIVA</span>
+                  </div>
+                </div>
+
+                <!-- Reopen Room Button (Shown only when expired or closed) -->
+                <button id="btnReopenRoom" class="hidden w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+                  <span>Reabrir Sala (15 Mins - Salida)</span>
+                </button>
+
+                <!-- Close Session Button (Manual Close) -->
+                <button id="btnCloseSession" class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-semibold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+                  <span>Cerrar Sala Manualmente</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Dynamic QR Code Card (Shown only when room is active) -->
+            <div id="qrCodeCard" class="hidden glass rounded-3xl p-6 flex flex-col items-center justify-center text-center gap-4">
+              <div>
+                <h4 class="text-sm font-semibold text-slate-200">Código QR Dinámico</h4>
+                <p class="text-xs text-slate-400 mt-0.5">Escanee este código con la cámara del celular</p>
+              </div>
+              
+              <!-- QR container with animation border -->
+              <div class="p-3 bg-white rounded-2xl relative">
+                <div id="qrcode" class="w-48 h-48 flex items-center justify-center text-black"></div>
+              </div>
+
+              <!-- Rotation info -->
+              <div class="flex items-center gap-2 bg-slate-900 px-3 py-1 rounded-full text-[10px] text-slate-400 border border-slate-800">
+                <svg class="w-3.5 h-3.5 text-[#39A900] animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18.2"></path></svg>
+                <span>Rotando en: <strong id="qrRotationCount" class="font-mono text-white text-xs">15s</strong></span>
+              </div>
+              
+              <div class="text-[10px] text-slate-500 max-w-xs">
+                El token se actualiza automáticamente cada 15 segundos para evitar capturas compartidas por WhatsApp.
+              </div>
+            </div>
+
+            <!-- Real-time rejections monitor -->
+            <div id="rejectionsCard" class="hidden glass rounded-3xl p-5 flex flex-col gap-3">
+              <h4 class="text-xs font-bold text-red-400 tracking-wider uppercase">Intentos de Fraude / Rechazos</h4>
+              <div id="rejectionsList" class="space-y-2 max-h-40 overflow-y-auto scrollbar-hide text-xs text-slate-400">
+                <!-- Loaded via JS -->
+                <div class="p-2.5 bg-slate-950/40 rounded-xl border border-slate-800/40">Sin rechazos recientes.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT PANEL: Real-time grid -->
+          <div class="flex-1 glass rounded-3xl p-6 flex flex-col gap-4 overflow-hidden min-h-[400px]">
+            <div class="flex justify-between items-center border-b border-slate-800/60 pb-3">
+              <h3 class="text-base font-bold text-white">Monitoreo de Asistencia en Tiempo Real</h3>
+              <div class="flex gap-2">
+                <button id="btnRefreshGrid" class="p-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 rounded-lg transition-all">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18.2"></path></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="flex-1 overflow-x-auto">
+              <table class="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr class="border-b border-slate-800 text-slate-400 text-xs font-semibold">
+                    <th class="py-3 px-4">Aprendiz</th>
+                    <th class="py-3 px-4">Documento</th>
+                    <th class="py-3 px-4">Ingreso</th>
+                    <th class="py-3 px-4">Salida</th>
+                    <th class="py-3 px-4 text-center">Horas Validadas</th>
+                    <th class="py-3 px-4 text-center">Tipo Registro</th>
+                    <th class="py-3 px-4">Estado</th>
+                    <th class="py-3 px-4 text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="attendanceGridBody" class="divide-y divide-slate-800/40 text-slate-300">
+                  <tr>
+                    <td colspan="8" class="text-center py-8 text-slate-500">Seleccione una Ficha e inicie la sesión de clase.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: REPORTE DE JORNADA -->
+        <div id="tabContentReport" class="w-full hidden glass rounded-3xl p-6 flex flex-col gap-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/60 pb-4">
+            <div>
+              <h3 class="text-lg font-bold text-white">Balance de Asistencia Fraccionada</h3>
+              <p class="text-xs text-slate-400 mt-0.5">Resumen acumulado del total de horas programadas (6 horas)</p>
+            </div>
+            
+            <button id="btnPrintReport" class="px-4 py-2 bg-[#39A900] hover:bg-[#329200] font-semibold text-xs rounded-xl transition-all flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+              <span>Imprimir Reporte</span>
+            </button>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-slate-800 text-slate-400 text-xs font-semibold">
+                  <th class="py-3 px-4">Aprendiz</th>
+                  <th class="py-3 px-4">Documento</th>
+                  <th class="py-3 px-4 text-center">Horas Programadas</th>
+                  <th class="py-3 px-4 text-center">Horas Asistidas</th>
+                  <th class="py-3 px-4 text-center">Horas Falla</th>
+                  <th class="py-3 px-4 text-center">Porcentaje de Jornada</th>
+                  <th class="py-3 px-4">Método Registro</th>
+                  <th class="py-3 px-4">Hora Entrada / Salida</th>
+                </tr>
+              </thead>
+              <tbody id="reportGridBody" class="divide-y divide-slate-800/40 text-slate-300">
+                <tr>
+                  <td colspan="8" class="text-center py-8 text-slate-500">Inicie la sesión para consolidar el reporte.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 bg-slate-950/40 py-4 text-center text-xs text-slate-600">
+    <div>Servicio Nacional de Aprendizaje (SENA) — Sistema de Control de Asistencias Móvil</div>
+  </footer>
+
+  <!-- Link script -->
+  <script src="app.js"></script>
+</body>
+</html>
