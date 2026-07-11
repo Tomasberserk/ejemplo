@@ -8,7 +8,10 @@ let state = {
   qrcode: null,
   refreshInterval: null,
   countdownInterval: null,
-  qrRotationInterval: null
+  qrRotationInterval: null,
+  searchQuery: '',
+  presentsList: [],
+  absentsList: []
 };
 
 // DOM Elements
@@ -71,6 +74,10 @@ const btnCancelExcuse = document.getElementById('btnCancelExcuse');
 const btnTabExcuses = document.getElementById('btnTabExcuses');
 const tabContentExcuses = document.getElementById('tabContentExcuses');
 const instructorExcusesGridBody = document.getElementById('instructorExcusesGridBody');
+
+// Search & Bulk Elements
+const searchStudentInput = document.getElementById('searchStudentInput');
+const btnBulkMarkPresent = document.getElementById('btnBulkMarkPresent');
 
 // Initialize API configuration
 apiUrlInput.value = localStorage.getItem('apiUrl') || window.location.origin;
@@ -481,7 +488,11 @@ async function fetchRealTimeAttendance() {
     });
     const rejections = await resR.json();
 
-    renderGrid(presents.data || [], absents.data || []);
+    // Save lists to state for offline/instant search
+    state.presentsList = presents.data || [];
+    state.absentsList = absents.data || [];
+
+    renderGridFiltered();
     renderRejections(rejections.data || []);
 
     if (state.activeTab === 'report') {
@@ -491,6 +502,21 @@ async function fetchRealTimeAttendance() {
   } catch (err) {
     console.error('Error fetching attendance details:', err);
   }
+}
+
+// Filter and render grid dynamically
+function renderGridFiltered() {
+  const query = state.searchQuery || '';
+  
+  const filteredPresents = state.presentsList.filter(p => 
+    p.nombre.toLowerCase().includes(query) || p.documento.includes(query)
+  );
+  
+  const filteredAbsents = state.absentsList.filter(a => 
+    a.nombre.toLowerCase().includes(query) || a.documento.includes(query)
+  );
+
+  renderGrid(filteredPresents, filteredAbsents);
 }
 
 // Render real-time grid
@@ -1005,3 +1031,58 @@ window.resolveExcuse = async (id, status) => {
     alert('Error al resolver excusa.');
   }
 };
+
+// Search Filter Listener
+searchStudentInput.addEventListener('input', (e) => {
+  state.searchQuery = e.target.value.toLowerCase().trim();
+  renderGridFiltered();
+});
+
+// Bulk Attendance Trigger
+btnBulkMarkPresent.addEventListener('click', async () => {
+  if (!state.activeSession) {
+    alert('No hay ninguna sesión activa para marcar asistencia.');
+    return;
+  }
+  const absents = state.absentsList || [];
+  if (absents.length === 0) {
+    alert('No hay aprendices ausentes por marcar en la grilla.');
+    return;
+  }
+
+  const confirmMsg = `¿Desea registrar asistencia manual rápida (PRESENTE - 6h) para los ${absents.length} aprendices ausentes?`;
+  if (!confirm(confirmMsg)) return;
+
+  btnBulkMarkPresent.disabled = true;
+  const originalText = btnBulkMarkPresent.textContent;
+  btnBulkMarkPresent.textContent = 'Procesando...';
+
+  try {
+    const promises = absents.map(a => 
+      fetch(`${state.apiUrl}/attendance/manual-override`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${state.token}`
+        },
+        body: JSON.stringify({
+          sessionId: state.activeSession.id,
+          documento: a.documento,
+          horas_validadas_asistencia: 6,
+          horas_inasistencia_acumulada: 0,
+          tipo_registro: 'MANUAL_OVERRIDE'
+        })
+      })
+    );
+
+    await Promise.all(promises);
+    alert('Se marcó asistencia completa para todos los aprendices ausentes.');
+    fetchRealTimeAttendance();
+  } catch (err) {
+    alert('Error al realizar el marcado masivo de asistencia.');
+    console.error(err);
+  } finally {
+    btnBulkMarkPresent.disabled = false;
+    btnBulkMarkPresent.textContent = originalText;
+  }
+});
