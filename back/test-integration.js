@@ -60,6 +60,7 @@ async function runTests() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       documento: '1001001001',
+      password: '1001001001',
       qrToken: qrData.qrToken,
       sessionId
     })
@@ -92,6 +93,7 @@ async function runTests() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       documento: '1002002002',
+      password: '1002002002',
       qrToken: qrDataLate.qrToken,
       sessionId
     })
@@ -107,6 +109,23 @@ async function runTests() {
     checkinDataLate.data.horas_inasistencia_acumulada === 1 && 
     checkinDataLate.data.tipo_registro === 'RETARDO_BLOQUE_1' ? 'PASS' : 'FAIL'
   );
+
+  // 6b. First-time Registration (Password setup)
+  console.log('\n6b. Performing First-Time Registration & Password Setup for Carlos Gómez...');
+  const resRegister = await fetch(`${baseUrl}/attendance/checkin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      documento: '1003003003',
+      registerPassword: 'new-secure-password',
+      qrToken: qrDataLate.qrToken,
+      sessionId
+    })
+  });
+  const registerData = await resRegister.json();
+  console.log('Register status:', registerData.data.status);
+  console.log('Register validadas:', registerData.data.horas_validadas_asistencia);
+  console.log('Register Result:', registerData.data.status === 'ASISTENCIA_PARCIAL' ? 'PASS' : 'FAIL');
 
   // 7. Manual Override (Rule 4)
   console.log('\n7. Performing Manual Override for María López...');

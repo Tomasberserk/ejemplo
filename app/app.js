@@ -1,6 +1,6 @@
 // State Management
 let state = {
-  apiUrl: 'http://localhost:4000',
+  apiUrl: window.location.origin,
   token: localStorage.getItem('token') || '',
   person: JSON.parse(localStorage.getItem('person') || 'null'),
   activeSession: null,
@@ -55,7 +55,7 @@ const reportGridBody = document.getElementById('reportGridBody');
 const btnPrintReport = document.getElementById('btnPrintReport');
 
 // Initialize API configuration
-apiUrlInput.value = localStorage.getItem('apiUrl') || 'http://localhost:4000';
+apiUrlInput.value = localStorage.getItem('apiUrl') || window.location.origin;
 state.apiUrl = apiUrlInput.value;
 
 apiUrlInput.addEventListener('change', () => {
