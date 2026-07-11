@@ -1,51 +1,47 @@
-import sqlite3 from 'sqlite3';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import pg from 'pg';
 import bcrypt from 'bcryptjs';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const isVercel = process.env.VERCEL === '1';
-const dbPath = isVercel 
-  ? '/tmp/database.sqlite' 
-  : path.resolve(__dirname, '../database.sqlite');
+const { Pool } = pg;
 
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening database:', err.message);
-  } else {
-    console.log('Connected to SQLite database at:', dbPath);
-  }
+// ── Connection ────────────────────────────────────────────────────────────────
+// Requires DATABASE_URL env var (Neon connection string)
+// Format: postgresql://user:password@host/database?sslmode=require
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
-// Promisify helper
-export const query = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+pool.on('error', (err) => {
+  console.error('Unexpected PostgreSQL pool error:', err.message);
+});
+
+// ── Placeholder converter: SQLite ? → PostgreSQL $1, $2, ... ─────────────────
+function toPg(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
+
+// ── Query helpers (same API as the old sqlite3 wrappers) ──────────────────────
+
+/** Execute a SELECT-like query, returns array of rows */
+export const query = async (rawSql, params = []) => {
+  const { rows } = await pool.query(toPg(rawSql), params);
+  return rows;
 };
 
-export const run = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve({ id: this.lastID, changes: this.changes });
-    });
-  });
+/** Execute an INSERT / UPDATE / DELETE, returns { id, changes } */
+export const run = async (rawSql, params = []) => {
+  const result = await pool.query(toPg(rawSql), params);
+  return { id: null, changes: result.rowCount };
 };
 
-export const get = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
+/** Execute a query and return ONLY the first row (or null) */
+export const get = async (rawSql, params = []) => {
+  const { rows } = await pool.query(toPg(rawSql), params);
+  return rows[0] || null;
 };
 
-// Initialize DB schema and seed data
+// ── Schema initialization ─────────────────────────────────────────────────────
 export async function initDb() {
   // Create tables
   await run(`
@@ -164,10 +160,11 @@ export async function initDb() {
   `);
 
   // Seed data if institutions is empty
+  // NOTE: PostgreSQL returns COUNT(*) as string (bigint), use Number() to compare
   const instCount = await get('SELECT COUNT(*) as count FROM institutions');
-  if (instCount.count === 0) {
+  if (Number(instCount.count) === 0) {
     console.log('Seeding database with SENA data...');
-    
+
     // Seed institution (SENA)
     const instId = 'inst_sena_1';
     await run(`
@@ -198,12 +195,10 @@ export async function initDb() {
     ]);
 
     // Seed people (Instructores & Aprendices)
-    // Jesús González (double role, password crypted)
-    const passJesús = await bcrypt.hash('qwerty.2026', 10);
-    // Instructor SENA (password plain text)
+    const passJesus = await bcrypt.hash('qwerty.2026', 10);
     const passInstructor = '1079606375';
 
-    const pJesúsId = 'per_jesus_1';
+    const pJesusId = 'per_jesus_1';
     const pInstId = 'per_inst_1';
 
     await run(`
@@ -212,19 +207,19 @@ export async function initDb() {
       (?, ?, ?, ?, ?, 1, ?, ?),
       (?, ?, ?, ?, ?, 1, ?, ?)
     `, [
-      pJesúsId, instId, '0000000001', 'Jesús González', 'MAT-001', passJesús, JSON.stringify(['INSTRUCTOR']),
+      pJesusId, instId, '0000000001', 'Jesus Gonzalez', 'MAT-001', passJesus, JSON.stringify(['INSTRUCTOR']),
       pInstId, instId, '1079606375', 'Instructor SENA', 'MAT-002', passInstructor, JSON.stringify(['INSTRUCTOR'])
     ]);
 
     // Seed Aprendices (documento as password)
     const learners = [
-      { id: 'per_apr_1', doc: '1001001001', name: 'Juan Pérez', mat: 'MAT-A1', units: [unit1Id] },
-      { id: 'per_apr_2', doc: '1002002002', name: 'María López', mat: 'MAT-A2', units: [unit1Id] },
-      { id: 'per_apr_3', doc: '1003003003', name: 'Carlos Gómez', mat: 'MAT-A3', units: [unit1Id] },
-      { id: 'per_apr_4', doc: '1004004004', name: 'Ana Rodríguez', mat: 'MAT-A4', units: [unit2Id] },
-      { id: 'per_apr_5', doc: '1005005005', name: 'Luis Martínez', mat: 'MAT-A5', units: [unit2Id] },
-      // Added some real documents from validation logs to support functional-checklist
-      { id: 'per_apr_6', doc: '1075508460', name: 'Aprendiz SENA Validado', mat: 'MAT-AV1', units: [unit1Id] }
+      { id: 'per_apr_1', doc: '1001001001', name: 'Juan Perez',       mat: 'MAT-A1', units: [unit1Id] },
+      { id: 'per_apr_2', doc: '1002002002', name: 'Maria Lopez',      mat: 'MAT-A2', units: [unit1Id] },
+      { id: 'per_apr_3', doc: '1003003003', name: 'Carlos Gomez',     mat: 'MAT-A3', units: [unit1Id] },
+      { id: 'per_apr_4', doc: '1004004004', name: 'Ana Rodriguez',    mat: 'MAT-A4', units: [unit2Id] },
+      { id: 'per_apr_5', doc: '1005005005', name: 'Luis Martinez',    mat: 'MAT-A5', units: [unit2Id] },
+      { id: 'per_apr_6', doc: '1075508460', name: 'Aprendiz SENA Validado', mat: 'MAT-AV1', units: [unit1Id] },
+      { id: 'per_apr_7', doc: '1077228780', name: 'Tomas Berserk',    mat: 'MAT-AV2', units: [unit1Id] }
     ];
 
     for (const l of learners) {
@@ -244,3 +239,4 @@ export async function initDb() {
     console.log('Database seeded successfully!');
   }
 }
+
