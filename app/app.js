@@ -42,6 +42,7 @@ const roomCountdown = document.getElementById('roomCountdown');
 const roomStatusBadge = document.getElementById('roomStatusBadge');
 const btnReopenRoom = document.getElementById('btnReopenRoom');
 const btnCloseSession = document.getElementById('btnCloseSession');
+const btnNewRoom = document.getElementById('btnNewRoom');
 
 const qrCodeCard = document.getElementById('qrCodeCard');
 const qrRotationCount = document.getElementById('qrRotationCount');
@@ -328,12 +329,17 @@ function updateControllerView() {
     // Manage status indicators
     if (state.activeSession.status === 'active') {
       qrCodeCard.classList.remove('hidden');
+      btnNewRoom.classList.add('hidden');
+      btnCloseSession.classList.remove('hidden');
       roomStatusBadge.textContent = state.activeSession.is_reopened ? 'REGISTRO SALIDA' : 'REGISTRO ENTRADA';
       roomStatusBadge.className = state.activeSession.is_reopened 
         ? 'inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20'
         : 'inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-500/10 text-green-400 border border-green-500/20';
     } else {
       qrCodeCard.classList.add('hidden');
+      btnNewRoom.classList.remove('hidden');
+      btnCloseSession.classList.add('hidden');
+      btnReopenRoom.classList.add('hidden');
       roomStatusBadge.textContent = 'CERRADA';
       roomStatusBadge.className = 'inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20';
     }
@@ -342,6 +348,7 @@ function updateControllerView() {
     activeSessionController.classList.add('hidden');
     qrCodeCard.classList.add('hidden');
     rejectionsCard.classList.add('hidden');
+    btnNewRoom.classList.add('hidden');
     activeFichaName.textContent = 'Seleccione una Ficha para Iniciar';
   }
 }
@@ -401,6 +408,8 @@ function startRoomCountdown() {
       clearInterval(state.countdownInterval);
       roomCountdown.textContent = '00:00';
       qrCodeCard.classList.add('hidden');
+      btnNewRoom.classList.remove('hidden');
+      btnCloseSession.classList.add('hidden');
       
       // Update badge dynamically
       roomStatusBadge.textContent = 'TIEMPO EXPIRADO';
@@ -675,4 +684,23 @@ function renderReportGrid(data) {
 // Print report
 btnPrintReport.addEventListener('click', () => {
   window.print();
+});
+
+// Create new session flow
+btnNewRoom.addEventListener('click', () => {
+  state.activeSession = null;
+  stopSessionPolling();
+  updateControllerView();
+  
+  // Reset grids
+  attendanceGridBody.innerHTML = `
+    <tr>
+      <td colspan="8" class="text-center py-8 text-slate-500">Seleccione una Ficha e inicie la sesión de clase.</td>
+    </tr>
+  `;
+  reportGridBody.innerHTML = `
+    <tr>
+      <td colspan="8" class="text-center py-8 text-slate-500">Inicie la sesión para consolidar el reporte.</td>
+    </tr>
+  `;
 });
