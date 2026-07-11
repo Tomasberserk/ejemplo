@@ -274,17 +274,19 @@ export const checkin = async (req, res) => {
     if (bodySessionId) {
       session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [bodySessionId]);
     } else {
-      // Find session by matching rotating token
-      // We look for active sessions
+      // Find session by matching rotating token (with 5-minute leeway = 20 blocks of 15s)
       const activeSessions = await query("SELECT * FROM attendance_sessions WHERE status = 'active'");
       for (const s of activeSessions) {
-        const tok0 = generateQrToken(s.id, 0);
-        const tok1 = generateQrToken(s.id, -15000); // 15s leeway
-        const tok2 = generateQrToken(s.id, 15000);
-        if (token === tok0 || token === tok1 || token === tok2) {
-          session = s;
-          break;
+        // Check next block (+1) and past blocks (up to 20 back)
+        for (let i = -1; i <= 20; i++) {
+          const offset = -i * 15000;
+          const tok = generateQrToken(s.id, offset);
+          if (token === tok) {
+            session = s;
+            break;
+          }
         }
+        if (session) break;
       }
     }
 
@@ -704,6 +706,194 @@ export const getSessionReport = async (req, res) => {
     });
 
     res.json(report);
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Student History
+export const getStudentHistory = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+
+    // 1. Get Ficha enrollment
+    const enrollment = await get('SELECT unit_id FROM enrollments WHERE person_id = ? AND active = 1', [studentId]);
+    if (!enrollment) {
+      return res.json({ data: { sessions: [], excuses: [] } });
+    }
+
+    const unitId = enrollment.unit_id;
+
+    // 2. Get all sessions for this Ficha
+    const sessions = await query(`
+      SELECT s.*, u.code as unit_code, u.name as unit_name
+      FROM attendance_sessions s
+      JOIN academic_units u ON s.unit_id = u.id
+      WHERE s.unit_id = ?
+      ORDER BY s.room_created_at DESC
+    `, [unitId]);
+
+    // 3. Get student attendance records
+    const records = await query(`
+      SELECT * FROM attendance_records 
+      WHERE person_id = ? AND status != 'rejected'
+    `, [studentId]);
+
+    // 4. Get student submitted excuses
+    const excuses = await query('SELECT * FROM excuses WHERE person_id = ?', [studentId]);
+
+    // Merge sessions with records and excuses
+    const recordMap = new Map(records.map(r => [r.session_id, r]));
+    const excuseMap = new Map(excuses.map(e => [e.session_id, e]));
+
+    const history = sessions.map(s => {
+      const rec = recordMap.get(s.id);
+      const exc = excuseMap.get(s.id);
+
+      return {
+        sessionId: s.id,
+        unitCode: s.unit_code,
+        unitName: s.unit_name,
+        date: s.room_created_at.split('T')[0],
+        status: rec ? rec.status : 'FALLA_TOTAL',
+        horas_programadas: rec ? rec.horas_programadas_sesion : 6,
+        horas_asistidas: rec ? rec.horas_validadas_asistencia : 0,
+        horas_falla: rec ? rec.horas_inasistencia_acumulada : 6,
+        tipo_registro: rec ? rec.tipo_registro : 'FALLA_TOTAL',
+        hora_ingreso: rec ? rec.hora_ingreso_real : '-',
+        hora_salida: rec ? (rec.hora_salida_real || '-') : '-',
+        excuse: exc ? {
+          id: exc.id,
+          text: exc.text,
+          fileName: exc.file_name,
+          status: exc.status
+        } : null
+      };
+    });
+
+    res.json({
+      data: {
+        history,
+        excuses
+      }
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Submit Student Excuse
+export const submitExcuse = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    const { sessionId, text, fileName, fileData } = req.body;
+
+    if (!sessionId || !text) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'sessionId y texto son obligatorios.' } });
+    }
+
+    // Verify session exists
+    const session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    if (!session) {
+      return res.status(404).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada.' } });
+    }
+
+    // Check if excuse already submitted
+    const existing = await get('SELECT * FROM excuses WHERE session_id = ? AND person_id = ?', [sessionId, studentId]);
+    if (existing) {
+      return res.status(400).json({ error: { code: 'DUPLICATE_EXCUSE', message: 'Ya has enviado una excusa para esta clase.' } });
+    }
+
+    const excuseId = `exc_${Date.now()}`;
+    const now = new Date();
+
+    await run(`
+      INSERT INTO excuses (id, session_id, person_id, text, file_name, file_data, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+    `, [excuseId, sessionId, studentId, text, fileName || null, fileData || null, now.toISOString()]);
+
+    const created = await get('SELECT * FROM excuses WHERE id = ?', [excuseId]);
+    res.status(201).json({ data: created, message: 'Excusa enviada al instructor correctamente.' });
+
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Get Instructor Excuses List
+export const getInstructorExcuses = async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT e.id, e.session_id, e.person_id, e.text, e.file_name, e.file_data, e.status, e.created_at,
+             p.nombre as student_name, p.documento as student_doc,
+             s.room_created_at, u.code as unit_code, u.name as unit_name
+      FROM excuses e
+      JOIN people p ON e.person_id = p.id
+      JOIN attendance_sessions s ON e.session_id = s.id
+      JOIN academic_units u ON s.unit_id = u.id
+      ORDER BY e.created_at DESC
+    `);
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Resolve Excuse (Approve or Reject)
+export const resolveExcuse = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body; // 'approved' or 'rejected'
+
+    if (!status || !['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'El estado debe serapproved o rejected.' } });
+    }
+
+    const excuse = await get('SELECT * FROM excuses WHERE id = ?', [id]);
+    if (!excuse) {
+      return res.status(404).json({ error: { code: 'EXCUSE_NOT_FOUND', message: 'Excusa no encontrada.' } });
+    }
+
+    // Update status in excuses
+    await run('UPDATE excuses SET status = ? WHERE id = ?', [status, id]);
+
+    if (status === 'approved') {
+      // Find or create attendance record and mark it justified
+      const person = await get('SELECT * FROM people WHERE id = ?', [excuse.person_id]);
+      const session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [excuse.session_id]);
+
+      const now = new Date();
+      const existingRecord = await get('SELECT * FROM attendance_records WHERE session_id = ? AND person_id = ?', [excuse.session_id, excuse.person_id]);
+
+      if (existingRecord) {
+        await run(`
+          UPDATE attendance_records
+          SET status = 'PRESENTE',
+              horas_validadas_asistencia = 6,
+              horas_inasistencia_acumulada = 0,
+              tipo_registro = 'EXCUSA_APROBADA',
+              message = 'Falla justificada por excusa aprobada.'
+          WHERE id = ?
+        `, [existingRecord.id]);
+      } else {
+        const recId = `ast_exc_${Date.now().toString().substring(8)}`;
+        const horaIngreso = '-';
+        await run(`
+          INSERT INTO attendance_records (
+            id, session_id, institution_id, unit_id, person_id, documento, status, message,
+            hora_ingreso_real, horas_programadas_sesion, horas_validadas_asistencia, horas_inasistencia_acumulada,
+            tipo_registro, created_at, client_ip
+          ) VALUES (?, ?, ?, ?, ?, ?, 'PRESENTE', 'Falla justificada por excusa aprobada.', ?, 6, 6, 0, 'EXCUSA_APROBADA', ?, 'override-excuse')
+        `, [
+          recId, excuse.session_id, session.institution_id, session.unit_id, person.id, person.documento,
+          horaIngreso, now.toISOString()
+        ]);
+      }
+    }
+
+    res.json({ message: `Excusa procesada como ${status} con éxito.` });
+
   } catch (err) {
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
   }

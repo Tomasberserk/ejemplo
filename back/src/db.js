@@ -148,6 +148,21 @@ export async function initDb() {
     )
   `);
 
+  await run(`
+    CREATE TABLE IF NOT EXISTS excuses (
+      id TEXT PRIMARY KEY,
+      session_id TEXT,
+      person_id TEXT,
+      text TEXT,
+      file_name TEXT,
+      file_data TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at TEXT,
+      FOREIGN KEY(session_id) REFERENCES attendance_sessions(id),
+      FOREIGN KEY(person_id) REFERENCES people(id)
+    )
+  `);
+
   // Seed data if institutions is empty
   const instCount = await get('SELECT COUNT(*) as count FROM institutions');
   if (instCount.count === 0) {

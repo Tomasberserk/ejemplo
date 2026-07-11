@@ -144,6 +144,9 @@
           <button id="btnTabReport" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all">
             Reporte de Jornada
           </button>
+          <button id="btnTabExcuses" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all">
+            Bandeja de Excusas
+          </button>
         </div>
       </div>
 
@@ -308,12 +311,128 @@
                   <td colspan="8" class="text-center py-8 text-slate-500">Inicie la sesión para consolidar el reporte.</td>
                 </tr>
               </tbody>
+          </div>
+        </div>
+
+        <!-- TAB 3: BANDEJA DE EXCUSAS (INSTRUCTOR) -->
+        <div id="tabContentExcuses" class="w-full hidden glass rounded-3xl p-6 flex flex-col gap-6">
+          <div class="border-b border-slate-800/60 pb-4">
+            <h3 class="text-lg font-bold text-white font-outfit">Bandeja de Excusas Recibidas</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Revise y apruebe o rechace las justificaciones de inasistencia presentadas por los aprendices.</p>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-slate-800 text-slate-400 text-xs font-semibold">
+                  <th class="py-3 px-4">Aprendiz</th>
+                  <th class="py-3 px-4">Ficha</th>
+                  <th class="py-3 px-4">Fecha Clase</th>
+                  <th class="py-3 px-4">Justificación / Motivo</th>
+                  <th class="py-3 px-4">Soporte</th>
+                  <th class="py-3 px-4">Estado</th>
+                  <th class="py-3 px-4 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="instructorExcusesGridBody" class="divide-y divide-slate-800/40 text-slate-300">
+                <tr>
+                  <td colspan="7" class="text-center py-8 text-slate-500">No hay excusas pendientes por revisar.</td>
+                </tr>
+              </tbody>
             </table>
           </div>
         </div>
 
       </div>
     </section>
+
+    <!-- STUDENT DASHBOARD -->
+    <section id="studentDashboardScreen" class="hidden flex-1 flex flex-col gap-6">
+      <!-- Student Header -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 glass rounded-2xl p-6">
+        <div>
+          <span class="text-xs text-slate-400 font-semibold tracking-wider uppercase">Portal del Aprendiz</span>
+          <h2 class="text-2xl font-bold tracking-tight text-white mt-0.5" id="studentFichaName">Ficha - Aprendiz</h2>
+        </div>
+        <div class="text-right">
+          <span class="text-xs text-slate-400">Total de clases tomadas</span>
+          <div class="text-xl font-bold text-[#39A900]" id="studentTotalHours">0 / 0h</div>
+        </div>
+      </div>
+
+      <!-- Student Portal Main View -->
+      <div class="glass rounded-3xl p-6 flex flex-col gap-4 overflow-hidden min-h-[400px]">
+        <div class="border-b border-slate-800/60 pb-3 flex justify-between items-center">
+          <h3 class="text-base font-bold text-white">Mi Historial de Asistencia</h3>
+          <button id="btnRefreshStudent" class="px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 rounded-lg transition-all text-xs flex items-center gap-1">
+            <svg class="w-3.5 h-3.5 text-[#39A900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18.2"></path></svg>
+            <span>Actualizar</span>
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 text-xs font-semibold">
+                <th class="py-3 px-4">Fecha</th>
+                <th class="py-3 px-4">Ficha</th>
+                <th class="py-3 px-4">Ingreso</th>
+                <th class="py-3 px-4">Salida</th>
+                <th class="py-3 px-4 text-center">Horas Asistidas</th>
+                <th class="py-3 px-4 text-center">Horas Falla</th>
+                <th class="py-3 px-4">Estado</th>
+                <th class="py-3 px-4 text-center">Justificación / Excusa</th>
+              </tr>
+            </thead>
+            <tbody id="studentHistoryGridBody" class="divide-y divide-slate-800/40 text-slate-300">
+              <tr>
+                <td colspan="8" class="text-center py-8 text-slate-500">Cargando historial de asistencias...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- EXCUSE SUBMIT MODAL -->
+    <div id="excuseModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+      <div class="w-full max-w-md glass rounded-3xl p-8 shadow-2xl relative">
+        <h3 class="text-lg font-bold text-white mb-1">Presentar Excusa Justificada</h3>
+        <p class="text-xs text-slate-400 mb-6">Suba una excusa médica o soporte para justificar su inasistencia.</p>
+
+        <form id="excuseForm" class="space-y-4">
+          <input type="hidden" id="excuseSessionId">
+          <div>
+            <label for="excuseText" class="block text-xs font-medium text-slate-300 mb-1.5">Descripción de la Excusa</label>
+            <textarea 
+              id="excuseText" 
+              required 
+              rows="4" 
+              placeholder="Ej: Presento excusa por cita médica. Adjunto soporte."
+              class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#39A900]"
+            ></textarea>
+          </div>
+          <div>
+            <label for="excuseFile" class="block text-xs font-medium text-slate-300 mb-1.5">Documento Soporte (PDF, JPG, PNG)</label>
+            <input 
+              type="file" 
+              id="excuseFile" 
+              accept=".pdf,.png,.jpg,.jpeg"
+              class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[#39A900]/10 file:text-[#39A900] hover:file:bg-[#39A900]/20"
+            >
+          </div>
+          
+          <div class="flex gap-3 pt-4">
+            <button type="button" id="btnCancelExcuse" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-xl text-sm font-semibold transition-all">
+              Cancelar
+            </button>
+            <button type="submit" class="flex-1 bg-[#39A900] hover:bg-[#329200] text-white py-2 rounded-xl text-sm font-semibold transition-all">
+              Enviar Excusa
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
 
   </main>
 

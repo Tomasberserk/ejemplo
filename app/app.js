@@ -54,6 +54,24 @@ const btnRefreshGrid = document.getElementById('btnRefreshGrid');
 const reportGridBody = document.getElementById('reportGridBody');
 const btnPrintReport = document.getElementById('btnPrintReport');
 
+// Student Dashboard & Excuses Elements
+const studentDashboardScreen = document.getElementById('studentDashboardScreen');
+const studentFichaName = document.getElementById('studentFichaName');
+const studentTotalHours = document.getElementById('studentTotalHours');
+const studentHistoryGridBody = document.getElementById('studentHistoryGridBody');
+const btnRefreshStudent = document.getElementById('btnRefreshStudent');
+
+const excuseModal = document.getElementById('excuseModal');
+const excuseForm = document.getElementById('excuseForm');
+const excuseSessionId = document.getElementById('excuseSessionId');
+const excuseText = document.getElementById('excuseText');
+const excuseFile = document.getElementById('excuseFile');
+const btnCancelExcuse = document.getElementById('btnCancelExcuse');
+
+const btnTabExcuses = document.getElementById('btnTabExcuses');
+const tabContentExcuses = document.getElementById('tabContentExcuses');
+const instructorExcusesGridBody = document.getElementById('instructorExcusesGridBody');
+
 // Initialize API configuration
 apiUrlInput.value = localStorage.getItem('apiUrl') || window.location.origin;
 state.apiUrl = apiUrlInput.value;
@@ -132,16 +150,27 @@ btnLogout.addEventListener('click', () => {
 function showLogin() {
   loginScreen.classList.remove('hidden');
   dashboardScreen.classList.add('hidden');
+  studentDashboardScreen.classList.add('hidden');
   userInfo.classList.add('hidden');
 }
 
 function showDashboard() {
   loginScreen.classList.add('hidden');
-  dashboardScreen.classList.remove('hidden');
   userInfo.classList.remove('hidden');
   userName.textContent = state.person.nombre;
-  loadFichas();
-  checkForActiveSession();
+
+  const isInstructor = state.person.roles.includes('INSTRUCTOR');
+  if (isInstructor) {
+    dashboardScreen.classList.remove('hidden');
+    studentDashboardScreen.classList.add('hidden');
+    loadFichas();
+    checkForActiveSession();
+    fetchInstructorExcuses();
+  } else {
+    dashboardScreen.classList.add('hidden');
+    studentDashboardScreen.classList.remove('hidden');
+    fetchStudentHistory();
+  }
 }
 
 // Load Fichas into dropdown
@@ -618,21 +647,37 @@ btnRefreshGrid.addEventListener('click', () => {
 });
 
 // TAB VIEW CONTROLLERS
+// TAB VIEW CONTROLLERS
 btnTabControl.addEventListener('click', () => {
   state.activeTab = 'control';
   btnTabControl.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-[#39A900] text-white transition-all';
   btnTabReport.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabExcuses.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   tabContentControl.classList.remove('hidden');
   tabContentReport.classList.add('hidden');
+  tabContentExcuses.classList.add('hidden');
 });
 
 btnTabReport.addEventListener('click', () => {
   state.activeTab = 'report';
   btnTabReport.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-[#39A900] text-white transition-all';
   btnTabControl.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabExcuses.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   tabContentControl.classList.add('hidden');
   tabContentReport.classList.remove('hidden');
+  tabContentExcuses.classList.add('hidden');
   fetchReportData();
+});
+
+btnTabExcuses.addEventListener('click', () => {
+  state.activeTab = 'excuses';
+  btnTabExcuses.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-[#39A900] text-white transition-all';
+  btnTabControl.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabReport.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  tabContentControl.classList.add('hidden');
+  tabContentReport.classList.add('hidden');
+  tabContentExcuses.classList.remove('hidden');
+  fetchInstructorExcuses();
 });
 
 // Report View Fetch
@@ -704,3 +749,259 @@ btnNewRoom.addEventListener('click', () => {
     </tr>
   `;
 });
+
+// --- STUDENT PORTAL LOGIC ---
+async function fetchStudentHistory() {
+  try {
+    const res = await fetch(`${state.apiUrl}/api/student/history`, {
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    const result = await res.json();
+    if (res.ok) {
+      renderStudentHistoryGrid(result.data.history);
+    } else {
+      console.error('Error fetching student history:', result.error.message);
+    }
+  } catch (err) {
+    console.error('Error in student history fetch:', err);
+  }
+}
+
+function renderStudentHistoryGrid(history) {
+  studentHistoryGridBody.innerHTML = '';
+  
+  if (!history || history.length === 0) {
+    studentFichaName.textContent = 'Sin Ficha Matriculada';
+    studentTotalHours.textContent = '0 / 0h';
+    studentHistoryGridBody.innerHTML = `
+      <tr>
+        <td colspan="8" class="text-center py-8 text-slate-500">No hay clases registradas en tu ficha académica.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  // Update header info
+  const first = history[0];
+  studentFichaName.textContent = `Ficha ${first.unitCode} - ${first.unitName}`;
+
+  let totalProg = 0;
+  let totalAsis = 0;
+
+  history.forEach(h => {
+    totalProg += h.horas_programadas;
+    totalAsis += h.horas_asistidas;
+
+    // Badges based on status
+    let badgeClass = 'bg-red-500/10 text-red-400 border border-red-500/20';
+    if (h.status === 'PRESENTE') {
+      badgeClass = h.tipo_registro === 'EXCUSA_APROBADA'
+        ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+        : 'bg-green-500/10 text-green-400 border border-green-500/20';
+    } else if (h.status === 'ASISTENCIA_PARCIAL') {
+      badgeClass = 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20';
+    }
+
+    // Excuse button or state
+    let excuseCol = '-';
+    if (h.horas_falla > 0) {
+      if (h.excuse) {
+        if (h.excuse.status === 'pending') {
+          excuseCol = `<span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">Excusa Pendiente</span>`;
+        } else if (h.excuse.status === 'approved') {
+          excuseCol = `<span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-500/10 text-green-400 border border-green-500/20">Excusa Aprobada</span>`;
+        } else {
+          excuseCol = `<span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20">Excusa Rechazada</span>`;
+        }
+      } else {
+        excuseCol = `
+          <button onclick="openExcuseModal('${h.sessionId}')" class="text-xs bg-blue-950/20 hover:bg-blue-950/40 border border-blue-500/20 text-blue-400 px-2 py-1 rounded-md transition-all">
+            Subir Excusa
+          </button>
+        `;
+      }
+    }
+
+    studentHistoryGridBody.innerHTML += `
+      <tr class="hover:bg-slate-900/20 border-b border-slate-800/40">
+        <td class="py-3 px-4 font-mono text-xs">${h.date}</td>
+        <td class="py-3 px-4 text-xs font-semibold text-slate-400">${h.unitCode}</td>
+        <td class="py-3 px-4 font-mono text-xs">${h.hora_ingreso}</td>
+        <td class="py-3 px-4 font-mono text-xs">${h.hora_salida}</td>
+        <td class="py-3 px-4 text-center font-mono text-green-400">${h.horas_asistidas}h</td>
+        <td class="py-3 px-4 text-center font-mono text-red-400">${h.horas_falla}h</td>
+        <td class="py-3 px-4">
+          <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${badgeClass}">${h.tipo_registro}</span>
+        </td>
+        <td class="py-3 px-4 text-center">${excuseCol}</td>
+      </tr>
+    `;
+  });
+
+  studentTotalHours.textContent = `${totalAsis} / ${totalProg}h`;
+}
+
+// Excuse upload modal helpers
+window.openExcuseModal = (sessionId) => {
+  excuseSessionId.value = sessionId;
+  excuseText.value = '';
+  excuseFile.value = '';
+  excuseModal.classList.remove('hidden');
+};
+
+btnCancelExcuse.addEventListener('click', () => {
+  excuseModal.classList.add('hidden');
+});
+
+btnRefreshStudent.addEventListener('click', () => {
+  fetchStudentHistory();
+});
+
+excuseForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const sessionId = excuseSessionId.value;
+  const text = excuseText.value.trim();
+  const file = excuseFile.files[0];
+
+  let fileName = null;
+  let fileData = null;
+
+  if (file) {
+    fileName = file.name;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      fileData = reader.result;
+      await sendExcuse(sessionId, text, fileName, fileData);
+    };
+    reader.readAsDataURL(file);
+  } else {
+    await sendExcuse(sessionId, text, null, null);
+  }
+});
+
+async function sendExcuse(sessionId, text, fileName, fileData) {
+  try {
+    const res = await fetch(`${state.apiUrl}/api/student/excuses`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.token}`
+      },
+      body: JSON.stringify({ sessionId, text, fileName, fileData })
+    });
+    const result = await res.json();
+    if (res.ok) {
+      alert('Excusa presentada con éxito.');
+      excuseModal.classList.add('hidden');
+      fetchStudentHistory();
+    } else {
+      alert(`Error: ${result.error.message}`);
+    }
+  } catch (err) {
+    alert('Error de red al presentar la excusa.');
+  }
+}
+
+// --- INSTRUCTOR EXCUSES LOGIC ---
+async function fetchInstructorExcuses() {
+  try {
+    const res = await fetch(`${state.apiUrl}/api/instructor/excuses`, {
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    const result = await res.json();
+    if (res.ok) {
+      renderInstructorExcusesGrid(result.data);
+    }
+  } catch (err) {
+    console.error('Error fetching instructor excuses:', err);
+  }
+}
+
+function renderInstructorExcusesGrid(excuses) {
+  instructorExcusesGridBody.innerHTML = '';
+  
+  if (!excuses || excuses.length === 0) {
+    instructorExcusesGridBody.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-center py-8 text-slate-500">No hay excusas registradas.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  excuses.forEach(e => {
+    let supportCol = '<span class="text-slate-600">Sin soporte</span>';
+    if (e.file_data) {
+      supportCol = `
+        <a href="${e.file_data}" download="${e.file_name}" class="inline-flex items-center gap-1 text-xs text-[#39A900] hover:underline font-semibold">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          <span>Descargar</span>
+        </a>
+      `;
+    }
+
+    let statusBadge = '<span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">PENDIENTE</span>';
+    if (e.status === 'approved') {
+      statusBadge = '<span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-500/10 text-green-400 border border-green-500/20">APROBADA</span>';
+    } else if (e.status === 'rejected') {
+      statusBadge = '<span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20">RECHAZADA</span>';
+    }
+
+    let actionsCol = '-';
+    if (e.status === 'pending') {
+      actionsCol = `
+        <div class="flex items-center justify-center gap-1.5">
+          <button onclick="resolveExcuse('${e.id}', 'approved')" class="text-xs bg-[#39A900]/15 hover:bg-[#39A900]/25 border border-[#39A900]/20 text-[#39A900] px-2 py-1 rounded-md transition-all font-semibold">
+            Aprobar
+          </button>
+          <button onclick="resolveExcuse('${e.id}', 'rejected')" class="text-xs bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-2 py-1 rounded-md transition-all font-semibold">
+            Rechazar
+          </button>
+        </div>
+      `;
+    }
+
+    instructorExcusesGridBody.innerHTML += `
+      <tr class="hover:bg-slate-900/20 border-b border-slate-800/40">
+        <td class="py-3 px-4">
+          <div class="font-medium text-slate-200">${e.student_name}</div>
+          <div class="text-[10px] text-slate-500 font-mono">${e.student_doc}</div>
+        </td>
+        <td class="py-3 px-4 text-xs font-semibold text-slate-400">${e.unit_code}</td>
+        <td class="py-3 px-4 font-mono text-xs">${e.room_created_at.split('T')[0]}</td>
+        <td class="py-3 px-4 text-xs max-w-xs truncate" title="${e.text}">${e.text}</td>
+        <td class="py-3 px-4">${supportCol}</td>
+        <td class="py-3 px-4">${statusBadge}</td>
+        <td class="py-3 px-4 text-center">${actionsCol}</td>
+      </tr>
+    `;
+  });
+}
+
+window.resolveExcuse = async (id, status) => {
+  const confirmMsg = status === 'approved' 
+    ? '¿Aprobar esta excusa? Esto marcará al estudiante como PRESENTE (6 horas asistidas) de forma retroactiva.'
+    : '¿Rechazar esta excusa? La inasistencia permanecerá en el sistema.';
+    
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const res = await fetch(`${state.apiUrl}/api/instructor/excuses/${id}/resolve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.token}`
+      },
+      body: JSON.stringify({ status })
+    });
+    const result = await res.json();
+    if (res.ok) {
+      alert(`Excusa procesada correctamente.`);
+      fetchInstructorExcuses();
+    } else {
+      alert(`Error: ${result.error.message}`);
+    }
+  } catch (err) {
+    alert('Error al resolver excusa.');
+  }
+};

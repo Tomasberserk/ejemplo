@@ -22,7 +22,11 @@ import {
   checkin,
   manualOverride,
   manualLateCheckin,
-  getSessionReport
+  getSessionReport,
+  getStudentHistory,
+  submitExcuse,
+  getInstructorExcuses,
+  resolveExcuse
 } from './controllers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -305,6 +309,14 @@ app.post('/room/reopen', reopenRoom); // public entry point to reopen
 app.post('/attendance/manual-override', authenticate, manualOverride);
 app.post('/attendance/manual-checkin', authenticate, manualLateCheckin);
 app.get('/reports/session/:sessionId', authenticate, getSessionReport);
+
+// Student Portal Routes
+app.get('/api/student/history', authenticate, getStudentHistory);
+app.post('/api/student/excuses', authenticate, submitExcuse);
+
+// Instructor Excuses Routes
+app.get('/api/instructor/excuses', authenticate, getInstructorExcuses);
+app.post('/api/instructor/excuses/:id/resolve', authenticate, resolveExcuse);
 
 // Error Handling Middleware
 app.use((err, req, res, next) => {

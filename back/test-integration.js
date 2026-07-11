@@ -1,6 +1,16 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
+
+function generateQrTokenHelper(sessionId, timeOffset = 0) {
+  const blockIndex = Math.floor((Date.now() + timeOffset) / 15000);
+  return crypto
+    .createHmac('sha256', 'qr-rotation-salt')
+    .update(`${sessionId}_${blockIndex}`)
+    .digest('hex')
+    .substring(0, 12);
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.resolve(__dirname, 'database.sqlite');
@@ -52,6 +62,25 @@ async function runTests() {
   const qrData = await resQr.json();
   console.log('QR Token fetched:', qrData.qrToken);
   console.log('QR Token Verification Result:', qrData.qrToken ? 'PASS' : 'FAIL');
+
+  // 4b. Verifying QR Token Leeway (5 minutes)
+  console.log('\n4b. Verifying QR Token Leeway (using a token generated 2 minutes ago)...');
+  const oldQrToken = generateQrTokenHelper(sessionId, -120000); // 2 minutes ago
+  
+  const resLeewayCheck = await fetch(`${baseUrl}/attendance/checkin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      documento: '1075508460',
+      password: '1075508460',
+      qrToken: oldQrToken,
+      sessionId
+    })
+  });
+  const leewayCheckData = await resLeewayCheck.json();
+  const leewayPass = resLeewayCheck.ok && leewayCheckData.data && leewayCheckData.data.status === 'accepted';
+  console.log('Leeway response:', leewayCheckData.error ? leewayCheckData.error.message : 'success');
+  console.log('Leeway Test Result:', leewayPass ? 'PASS' : 'FAIL');
 
   // 5. Check-in within punctuality window (Rule 3)
   console.log('\n5. Performing Punctual Check-in...');
@@ -173,6 +202,79 @@ async function runTests() {
   console.log('María López Report hours:', mariaReport.horas_asistidas);
   console.log('María López Report percentage:', mariaReport.porcentaje_asistencia);
   console.log('Report Result:', mariaReport.horas_asistidas === 6 && mariaReport.porcentaje_asistencia === 100 ? 'PASS' : 'FAIL');
+
+  // 10. Student Portal & Excuses Workflow
+  console.log('\n10. Testing Student Excuses Workflow...');
+  
+  // A. Student Login (Carlos Gómez)
+  const resStudentLogin = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ documento: '1003003003', password: 'new-secure-password' })
+  });
+  const studentLoginData = await resStudentLogin.json();
+  const studentToken = studentLoginData.data.token;
+  console.log('Student Login status:', resStudentLogin.status);
+  console.log('Student Login Result:', resStudentLogin.ok && studentToken ? 'PASS' : 'FAIL');
+
+  // B. Fetch student history
+  const resStudentHist = await fetch(`${baseUrl}/api/student/history`, {
+    headers: { 'Authorization': `Bearer ${studentToken}` }
+  });
+  const studentHistData = await resStudentHist.json();
+  console.log('Student History count:', studentHistData.data.history.length);
+  console.log('Student History Result:', studentHistData.data.history.length > 0 ? 'PASS' : 'FAIL');
+
+  // C. Submit excuse
+  const resExcuseSub = await fetch(`${baseUrl}/api/student/excuses`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${studentToken}`
+    },
+    body: JSON.stringify({
+      sessionId,
+      text: 'Presento excusa médica por incapacidad de la EPS.',
+      fileName: 'soporte.png',
+      fileData: 'data:image/png;base64,iVBORw0KGgoAAAANS...'
+    })
+  });
+  const excuseSubData = await resExcuseSub.json();
+  const excuseId = excuseSubData.data.id;
+  console.log('Excuse submission status:', resExcuseSub.status);
+  console.log('Excuse Submission Result:', resExcuseSub.status === 201 && excuseId ? 'PASS' : 'FAIL');
+
+  // D. Instructor fetches excuses list
+  const resInstExcuses = await fetch(`${baseUrl}/api/instructor/excuses`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  const instExcusesData = await resInstExcuses.json();
+  const excuseFound = instExcusesData.data.find(e => e.id === excuseId);
+  console.log('Excuse found in Instructor List:', excuseFound ? 'YES' : 'NO');
+  console.log('Excuse status before approval:', excuseFound ? excuseFound.status : 'N/A');
+  console.log('Excuse Fetch Result:', excuseFound && excuseFound.status === 'pending' ? 'PASS' : 'FAIL');
+
+  // E. Instructor approves excuse
+  const resResolve = await fetch(`${baseUrl}/api/instructor/excuses/${excuseId}/resolve`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ status: 'approved' })
+  });
+  console.log('Resolve status:', resResolve.status);
+  console.log('Resolve Result:', resResolve.ok ? 'PASS' : 'FAIL');
+
+  // F. Verify student attendance record is updated to justified (PRESENTE, 6 hours)
+  const resReportPostExcuse = await fetch(`${baseUrl}/reports/session/${sessionId}`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  const reportListPostExcuse = await resReportPostExcuse.json();
+  const carlosReport = reportListPostExcuse.find(r => r.documento === '1003003003');
+  console.log('Carlos Gómez Report hours (after excuse):', carlosReport.horas_asistidas);
+  console.log('Carlos Gómez Report status (after excuse):', carlosReport.tipo_registro);
+  console.log('Excuse Integration Result:', carlosReport.horas_asistidas === 6 && carlosReport.tipo_registro === 'EXCUSA_APROBADA' ? 'PASS' : 'FAIL');
 
   db.close();
   console.log('\n--- TESTS COMPLETED ---');
