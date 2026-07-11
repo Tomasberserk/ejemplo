@@ -331,40 +331,8 @@ export const checkin = async (req, res) => {
       return res.status(400).json({ error: { code: 'NOT_ENROLLED', message: 'El aprendiz no pertenece a esta ficha.' } });
     }
 
-    // PASSWORD LOGIC (Login / First-time Registration)
-    const { password, registerPassword } = req.body;
-
-    if (registerPassword) {
-      // First-time registration / Password setup
-      const hashedPassword = await bcrypt.hash(registerPassword, 10);
-      await run('UPDATE people SET password = ? WHERE id = ?', [hashedPassword, person.id]);
-      console.log(`Password configured/updated for student ${documento}`);
-    } else {
-      // Login check-in
-      if (!password) {
-        return res.status(400).json({ error: { code: 'PASSWORD_REQUIRED', message: 'La contraseña es requerida para registrar asistencia.' } });
-      }
-
-      let isMatch = false;
-      if (person.password.startsWith('$2b$') || person.password.startsWith('$2a$')) {
-        isMatch = await bcrypt.compare(password, person.password);
-      } else {
-        isMatch = (password === person.password);
-      }
-
-      if (!isMatch) {
-        // Record rejected attempt in DB
-        await run(`
-          INSERT INTO attendance_records (
-            id, session_id, institution_id, unit_id, person_id, documento, status, reject_reason, message, created_at, client_ip
-          ) VALUES (?, ?, ?, ?, ?, 'rejected', 'INVALID_PASSWORD', ?, ?, ?)
-        `, [`rec_${Date.now()}`, session.id, session.institution_id, session.unit_id, person.id, documento, 'Contraseña incorrecta.', now.toISOString(), getClientIp(req)]);
-
-        return res.status(401).json({ error: { code: 'INVALID_PASSWORD', message: 'Contraseña incorrecta.' } });
-      }
-    }
-
     // SECURITY CHECK: Subnet LAN / Client IP match
+    // NOTE: QR token rotation IS the authentication. Document just identifies the student.
     const clientIp = getClientIp(req);
     const creatorIp = session.creator_ip;
     const bypassIp = process.env.BYPASS_IP_CHECK === 'true';
