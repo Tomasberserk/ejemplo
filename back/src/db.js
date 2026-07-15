@@ -1,19 +1,39 @@
 import pg from 'pg';
+import sqlite3 from 'sqlite3';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 
-const { Pool } = pg;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const isPostgres = !!process.env.DATABASE_URL;
 
-// ── Connection ────────────────────────────────────────────────────────────────
-// Requires DATABASE_URL env var (Neon connection string)
-// Format: postgresql://user:password@host/database?sslmode=require
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
+let pool;
+let sqliteDb;
 
-pool.on('error', (err) => {
-  console.error('Unexpected PostgreSQL pool error:', err.message);
-});
+if (isPostgres) {
+  const { Pool } = pg;
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+  });
+  pool.on('error', (err) => {
+    console.error('Unexpected PostgreSQL pool error:', err.message);
+  });
+  console.log('Database type: PostgreSQL');
+} else {
+  const isVercel = process.env.VERCEL === '1';
+  const dbPath = isVercel 
+    ? '/tmp/database.sqlite' 
+    : path.resolve(__dirname, '../database.sqlite');
+  
+  sqliteDb = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      console.error('Error opening SQLite database:', err.message);
+    } else {
+      console.log('Database type: SQLite (Local) at:', dbPath);
+    }
+  });
+}
 
 // ── Placeholder converter: SQLite ? → PostgreSQL $1, $2, ... ─────────────────
 function toPg(sql) {
@@ -25,20 +45,47 @@ function toPg(sql) {
 
 /** Execute a SELECT-like query, returns array of rows */
 export const query = async (rawSql, params = []) => {
-  const { rows } = await pool.query(toPg(rawSql), params);
-  return rows;
+  if (isPostgres) {
+    const { rows } = await pool.query(toPg(rawSql), params);
+    return rows;
+  } else {
+    return new Promise((resolve, reject) => {
+      sqliteDb.all(rawSql, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+  }
 };
 
 /** Execute an INSERT / UPDATE / DELETE, returns { id, changes } */
 export const run = async (rawSql, params = []) => {
-  const result = await pool.query(toPg(rawSql), params);
-  return { id: null, changes: result.rowCount };
+  if (isPostgres) {
+    const result = await pool.query(toPg(rawSql), params);
+    return { id: null, changes: result.rowCount };
+  } else {
+    return new Promise((resolve, reject) => {
+      sqliteDb.run(rawSql, params, function (err) {
+        if (err) reject(err);
+        else resolve({ id: this.lastID, changes: this.changes });
+      });
+    });
+  }
 };
 
 /** Execute a query and return ONLY the first row (or null) */
 export const get = async (rawSql, params = []) => {
-  const { rows } = await pool.query(toPg(rawSql), params);
-  return rows[0] || null;
+  if (isPostgres) {
+    const { rows } = await pool.query(toPg(rawSql), params);
+    return rows[0] || null;
+  } else {
+    return new Promise((resolve, reject) => {
+      sqliteDb.get(rawSql, params, (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+  }
 };
 
 // ── Schema initialization ─────────────────────────────────────────────────────
