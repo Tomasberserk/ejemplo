@@ -90,6 +90,23 @@ export const get = async (rawSql, params = []) => {
 
 // ── Schema initialization ─────────────────────────────────────────────────────
 export async function initDb() {
+  // SQLite schema migration fallback: DROP late_requests table if it lacks created_at column
+  try {
+    if (!isPostgres) {
+      const tableCheck = await get(`SELECT name FROM sqlite_master WHERE type='table' AND name='late_requests'`);
+      if (tableCheck) {
+        const cols = await query(`PRAGMA table_info(late_requests)`);
+        const hasCreatedAt = cols.some(c => c.name === 'created_at');
+        if (!hasCreatedAt) {
+          await run(`DROP TABLE late_requests`);
+          console.log('Migration Cleanup: Dropped outdated late_requests table in SQLite');
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Pre-init migration cleanup error:', err.message);
+  }
+
   // Create tables
   await run(`
     CREATE TABLE IF NOT EXISTS institutions (
