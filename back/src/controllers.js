@@ -866,3 +866,256 @@ export const resolveExcuse = async (req, res) => {
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
   }
 };
+
+// ── SELF-REGISTER + CHECK-IN via QR ──────────────────────────────────────────
+// Student not in DB can register themselves while an active session is open.
+export const selfRegisterCheckin = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { documento, nombre, password } = req.body;
+
+    if (!documento || !nombre) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento y nombre son requeridos.' } });
+    }
+
+    // Find session by token (with 5-minute leeway)
+    let session = null;
+    const activeSessions = await query("SELECT * FROM attendance_sessions WHERE status = 'active'");
+    for (const s of activeSessions) {
+      for (let i = -1; i <= 20; i++) {
+        const tok = generateQrToken(s.id, -i * 15000);
+        if (token === tok) { session = s; break; }
+      }
+      if (session) break;
+    }
+
+    if (!session) {
+      return res.status(400).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada o token QR inválido/vencido.' } });
+    }
+
+    // Check room not expired
+    const now = new Date();
+    if (now > new Date(session.room_expires_at)) {
+      return res.status(400).json({ error: { code: 'ROOM_EXPIRED', message: 'La ventana de 15 minutos ha cerrado.' } });
+    }
+
+    // Create or find person
+    let person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [documento]);
+    let isNewStudent = false;
+
+    if (!person) {
+      isNewStudent = true;
+      const personId = `per_${Date.now()}`;
+      const hashedPwd = await bcrypt.hash(password || documento, 10);
+      await run(`
+        INSERT INTO people (id, institution_id, documento, nombre, matricula, active, password, roles)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+      `, [personId, session.institution_id, documento, nombre, `MAT-${documento}`, hashedPwd, JSON.stringify(['APRENDIZ'])]);
+
+      await run(`
+        INSERT INTO enrollments (id, institution_id, unit_id, person_id, active)
+        VALUES (?, ?, ?, ?, 1)
+      `, [`enr_${personId}_${session.unit_id}`, session.institution_id, session.unit_id, personId]);
+
+      person = await get('SELECT * FROM people WHERE id = ?', [personId]);
+    } else {
+      // Enroll in unit if not already
+      const enrollment = await get('SELECT * FROM enrollments WHERE unit_id = ? AND person_id = ? AND active = 1', [session.unit_id, person.id]);
+      if (!enrollment) {
+        await run(`
+          INSERT INTO enrollments (id, institution_id, unit_id, person_id, active)
+          VALUES (?, ?, ?, ?, 1)
+        `, [`enr_${person.id}_${session.unit_id}`, session.institution_id, session.unit_id, person.id]);
+      }
+    }
+
+    // Check duplicate
+    const existingRecord = await get(`SELECT * FROM attendance_records WHERE session_id = ? AND person_id = ? AND status != 'rejected'`, [session.id, person.id]);
+    if (existingRecord) {
+      const unit = await get('SELECT * FROM academic_units WHERE id = ?', [session.unit_id]);
+      return res.status(200).json({
+        data: { ...existingRecord, nombre: person.nombre, ficha: unit?.name || '', isNewStudent: false, alreadyRegistered: true }
+      });
+    }
+
+    // Calculate attendance
+    const activatedTime = new Date(session.activated_at);
+    const minutesElapsed = Math.floor((now - activatedTime) / 60000);
+    const horasProgramadas = 6;
+    let horasAsistidas = 6, horasFalla = 0, tipoRegistro = 'REGULAR', status = 'accepted';
+
+    if (minutesElapsed > 15) {
+      const hoursMissed = Math.min(horasProgramadas, Math.ceil(minutesElapsed / 60));
+      horasAsistidas = horasProgramadas - hoursMissed;
+      horasFalla = hoursMissed;
+      tipoRegistro = `RETARDO_BLOQUE_${hoursMissed}`;
+      status = 'ASISTENCIA_PARCIAL';
+    }
+
+    const recId = `ast_sr_${Date.now()}`;
+    const horaIngreso = now.toTimeString().split(' ')[0];
+
+    await run(`
+      INSERT INTO attendance_records (
+        id, session_id, institution_id, unit_id, person_id, documento, status, message,
+        hora_ingreso_real, horas_programadas_sesion, horas_validadas_asistencia,
+        horas_inasistencia_acumulada, tipo_registro, created_at, client_ip
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      recId, session.id, session.institution_id, session.unit_id, person.id, documento,
+      status,
+      isNewStudent ? 'Registro nuevo. Asistencia marcada automáticamente.' : (horasFalla > 0 ? `Llegada tarde. ${horasFalla}h de inasistencia.` : 'Asistencia puntual registrada.'),
+      horaIngreso, horasProgramadas, horasAsistidas, horasFalla, tipoRegistro, now.toISOString(), getClientIp(req)
+    ]);
+
+    const record = await get('SELECT * FROM attendance_records WHERE id = ?', [recId]);
+    const unit = await get('SELECT * FROM academic_units WHERE id = ?', [session.unit_id]);
+
+    return res.status(201).json({
+      data: { ...record, nombre: person.nombre, ficha: unit?.name || '', isNewStudent }
+    });
+  } catch (err) {
+    console.error('Self-register error:', err);
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// ── SUBMIT LATE REQUEST ───────────────────────────────────────────────────────
+// Student arrives late or session expired; sends a request to the instructor.
+export const submitLateRequest = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { documento, nombre, justification } = req.body;
+
+    if (!documento || !nombre) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento y nombre son requeridos.' } });
+    }
+
+    // Find session by token (wider window: up to 2 hours back for expired sessions)
+    let session = null;
+    const sessions = await query("SELECT * FROM attendance_sessions WHERE status != 'draft' ORDER BY created_at DESC");
+    for (const s of sessions) {
+      for (let i = -1; i <= 480; i++) { // 480 x 15s = 2 hours
+        const tok = generateQrToken(s.id, -i * 15000);
+        if (token === tok) { session = s; break; }
+      }
+      if (session) break;
+    }
+
+    if (!session) {
+      return res.status(400).json({ error: { code: 'SESSION_NOT_FOUND', message: 'No se pudo identificar la sesión de clase con este QR.' } });
+    }
+
+    const requestId = `lr_${Date.now()}`;
+    const now = new Date();
+
+    await run(`
+      INSERT INTO late_requests (id, session_id, institution_id, unit_id, documento, nombre, justification, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    `, [requestId, session.id, session.institution_id, session.unit_id, documento, nombre, justification || '', now.toISOString()]);
+
+    return res.status(201).json({
+      data: { id: requestId, message: 'Solicitud enviada al instructor. Te notificarán cuando sea aprobada.' }
+    });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// ── GET INSTRUCTOR LATE REQUESTS ──────────────────────────────────────────────
+export const getInstructorLateRequests = async (req, res) => {
+  try {
+    const { person } = req;
+
+    // Get all units this instructor teaches
+    const units = await query(`
+      SELECT DISTINCT s.unit_id
+      FROM attendance_sessions s
+      JOIN people p ON p.id = ?
+      WHERE s.institution_id = (SELECT institution_id FROM people WHERE id = ?)
+    `, [person.id, person.id]);
+
+    const unitIds = units.map(u => u.unit_id);
+
+    if (unitIds.length === 0) {
+      return res.json({ data: [] });
+    }
+
+    const placeholders = unitIds.map(() => '?').join(',');
+    const rows = await query(`
+      SELECT lr.*, au.name as ficha_name, au.code as ficha_code
+      FROM late_requests lr
+      JOIN academic_units au ON lr.unit_id = au.id
+      WHERE lr.unit_id IN (${placeholders})
+      ORDER BY lr.created_at DESC
+    `, unitIds);
+
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// ── RESOLVE LATE REQUEST ──────────────────────────────────────────────────────
+export const resolveLateRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, horasDescontar = 1 } = req.body; // 'approved' or 'rejected'
+
+    const request = await get('SELECT * FROM late_requests WHERE id = ?', [id]);
+    if (!request) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Solicitud no encontrada.' } });
+
+    if (status === 'approved') {
+      const now = new Date();
+
+      // Find or create person
+      let person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [request.documento]);
+      if (!person) {
+        const personId = `per_lr_${Date.now()}`;
+        await run(`
+          INSERT INTO people (id, institution_id, documento, nombre, matricula, active, password, roles)
+          VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+        `, [personId, request.institution_id, request.documento, request.nombre, `MAT-${request.documento}`, request.documento, JSON.stringify(['APRENDIZ'])]);
+
+        await run(`
+          INSERT INTO enrollments (id, institution_id, unit_id, person_id, active)
+          VALUES (?, ?, ?, ?, 1)
+        `, [`enr_${personId}_${request.unit_id}`, request.institution_id, request.unit_id, personId]);
+
+        person = await get('SELECT * FROM people WHERE id = ?', [personId]);
+      }
+
+      const horasAsistidas = Math.max(0, 6 - horasDescontar);
+      const horasFalla = Number(horasDescontar);
+
+      const existing = await get(`SELECT * FROM attendance_records WHERE session_id = ? AND person_id = ? AND status != 'rejected'`, [request.session_id, person.id]);
+
+      if (existing) {
+        await run(`
+          UPDATE attendance_records
+          SET horas_validadas_asistencia = ?, horas_inasistencia_acumulada = ?, tipo_registro = 'LATE_VALIDATED', status = 'ASISTENCIA_PARCIAL',
+              message = 'Ingreso tardío validado por el instructor.'
+          WHERE id = ?
+        `, [horasAsistidas, horasFalla, existing.id]);
+      } else {
+        const recId = `ast_lv_${Date.now()}`;
+        const horaIngreso = now.toTimeString().split(' ')[0];
+        await run(`
+          INSERT INTO attendance_records (
+            id, session_id, institution_id, unit_id, person_id, documento, status, message,
+            hora_ingreso_real, horas_programadas_sesion, horas_validadas_asistencia,
+            horas_inasistencia_acumulada, tipo_registro, created_at, client_ip
+          ) VALUES (?, ?, ?, ?, ?, ?, 'ASISTENCIA_PARCIAL', 'Ingreso tardío validado por el instructor.', ?, 6, ?, ?, 'LATE_VALIDATED', ?, 'late-validated')
+        `, [recId, request.session_id, request.institution_id, request.unit_id, person.id, request.documento,
+            horaIngreso, horasAsistidas, horasFalla, now.toISOString()]);
+      }
+    }
+
+    await run('UPDATE late_requests SET status = ?, horas_descontar = ? WHERE id = ?', [status, horasDescontar, id]);
+
+    res.json({ data: { id, status, message: status === 'approved' ? 'Ingreso tardío aprobado.' : 'Solicitud rechazada.' } });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+

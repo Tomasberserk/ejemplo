@@ -206,6 +206,21 @@ export async function initDb() {
     )
   `);
 
+  await run(`
+    CREATE TABLE IF NOT EXISTS late_requests (
+      id TEXT PRIMARY KEY,
+      session_id TEXT,
+      institution_id TEXT,
+      unit_id TEXT,
+      documento TEXT,
+      nombre TEXT,
+      justification TEXT,
+      status TEXT DEFAULT 'pending',
+      horas_descontar INTEGER DEFAULT 1,
+      created_at TEXT
+    )
+  `);
+
   // Seed data if institutions is empty
   // NOTE: PostgreSQL returns COUNT(*) as string (bigint), use Number() to compare
   const instCount = await get('SELECT COUNT(*) as count FROM institutions');
