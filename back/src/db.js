@@ -221,6 +221,32 @@ export async function initDb() {
     )
   `);
 
+  // Migration: Add created_at column if not exists
+  try {
+    if (isPostgres) {
+      // PostgreSQL migration check
+      const checkCol = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name='late_requests' and column_name='created_at'
+      `);
+      if (checkCol.length === 0) {
+        await run(`ALTER TABLE late_requests ADD COLUMN created_at TEXT`);
+        console.log('Migration: Added created_at column to late_requests in Postgres');
+      }
+    } else {
+      // SQLite migration check
+      const columns = await query(`PRAGMA table_info(late_requests)`);
+      const hasCreatedAt = columns.some(col => col.name === 'created_at');
+      if (!hasCreatedAt) {
+        await run(`ALTER TABLE late_requests ADD COLUMN created_at TEXT`);
+        console.log('Migration: Added created_at column to late_requests in SQLite');
+      }
+    }
+  } catch (migErr) {
+    console.error('Migration error (non-fatal):', migErr.message);
+  }
+
   // Seed data if institutions is empty
   // NOTE: PostgreSQL returns COUNT(*) as string (bigint), use Number() to compare
   const instCount = await get('SELECT COUNT(*) as count FROM institutions');
