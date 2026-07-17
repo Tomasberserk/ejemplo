@@ -107,13 +107,22 @@ async function checkApiHealth() {
   return false;
 }
 
+// HTML5 QR Scanner Instance
+let html5QrCode = null;
+
 // App Initialization
 document.addEventListener('DOMContentLoaded', () => {
   checkApiHealth();
+  
+  // Bind Portal Buttons
+  document.getElementById('btnGoToScanner').addEventListener('click', startQrScanner);
+  document.getElementById('btnGoToLogin').addEventListener('click', showLogin);
+  document.getElementById('btnCancelScanner').addEventListener('click', showPortal);
+
   if (state.token && state.person) {
     showDashboard();
   } else {
-    showLogin();
+    showPortal();
   }
 });
 
@@ -156,20 +165,87 @@ btnLogout.addEventListener('click', () => {
   localStorage.removeItem('token');
   localStorage.removeItem('person');
   stopSessionPolling();
-  showLogin();
+  showPortal();
 });
 
+function showPortal() {
+  document.getElementById('portalScreen').classList.remove('hidden');
+  document.getElementById('scannerScreen').classList.add('hidden');
+  loginScreen.classList.add('hidden');
+  dashboardScreen.classList.add('hidden');
+  studentDashboardScreen.classList.add('hidden');
+  userInfo.classList.add('hidden');
+  stopQrScanner();
+}
+
+function startQrScanner() {
+  document.getElementById('portalScreen').classList.add('hidden');
+  document.getElementById('scannerScreen').classList.remove('hidden');
+  const feedback = document.getElementById('scannerFeedback');
+  feedback.classList.add('hidden');
+
+  html5QrCode = new Html5Qrcode("reader");
+  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+  html5QrCode.start(
+    { facingMode: "environment" }, 
+    config,
+    (decodedText) => {
+      stopQrScanner();
+      try {
+        const url = new URL(decodedText);
+        const pathParts = url.pathname.split('/');
+        const token = pathParts[pathParts.length - 1];
+        if (token && (url.pathname.includes('/attendance/') || url.pathname.includes('/attendance'))) {
+          window.location.href = `/attendance/${token}`;
+        } else {
+          feedback.textContent = "QR escaneado no es un código de asistencia válido.";
+          feedback.className = "p-3 rounded-xl text-center text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20";
+          feedback.classList.remove('hidden');
+        }
+      } catch (err) {
+        if (decodedText.length > 5) {
+          window.location.href = `/attendance/${decodedText}`;
+        } else {
+          feedback.textContent = "Código QR inválido.";
+          feedback.className = "p-3 rounded-xl text-center text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20";
+          feedback.classList.remove('hidden');
+        }
+      }
+    },
+    (errorMessage) => {}
+  ).catch(err => {
+    feedback.textContent = "Error al acceder a la cámara: " + err;
+    feedback.className = "p-3 rounded-xl text-center text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20";
+    feedback.classList.remove('hidden');
+  });
+}
+
+function stopQrScanner() {
+  if (html5QrCode && html5QrCode.isScanning) {
+    html5QrCode.stop().then(() => {
+      html5QrCode = null;
+    }).catch(err => console.error("Error stopping scanner", err));
+  }
+}
+
 function showLogin() {
+  document.getElementById('portalScreen').classList.add('hidden');
+  document.getElementById('scannerScreen').classList.add('hidden');
   loginScreen.classList.remove('hidden');
   dashboardScreen.classList.add('hidden');
   studentDashboardScreen.classList.add('hidden');
   userInfo.classList.add('hidden');
+  stopQrScanner();
 }
 
 function showDashboard() {
+  document.getElementById('portalScreen').classList.add('hidden');
+  document.getElementById('scannerScreen').classList.add('hidden');
   loginScreen.classList.add('hidden');
   userInfo.classList.remove('hidden');
   userName.textContent = state.person.nombre;
+  stopQrScanner();
 
   const isInstructor = state.person.roles.includes('INSTRUCTOR');
   if (isInstructor) {
@@ -528,10 +604,10 @@ function renderGridFiltered() {
 function renderGrid(presents, absents) {
   attendanceGridBody.innerHTML = '';
 
-  if (presents.length === 0 && absents.length === 0) {
+  if (presents.length === 0) {
     attendanceGridBody.innerHTML = `
       <tr>
-        <td colspan="8" class="text-center py-8 text-slate-500">No hay aprendices inscritos en esta ficha.</td>
+        <td colspan="8" class="text-center py-8 text-slate-500">Ningún aprendiz ha registrado asistencia en esta sesión.</td>
       </tr>
     `;
     return;
@@ -558,33 +634,6 @@ function renderGrid(presents, absents) {
           <div class="flex items-center justify-center gap-1.5">
             <button onclick="triggerManualOverride('${p.documento}', 6, 0, 'MANUAL_OVERRIDE')" class="text-xs bg-slate-800 hover:bg-slate-700 text-[#39A900] border border-[#39A900]/20 px-2 py-1 rounded-md transition-all">
               Quitar Falla
-            </button>
-          </div>
-        </td>
-      </tr>
-    `;
-  });
-
-  // Render Absents
-  absents.forEach(a => {
-    attendanceGridBody.innerHTML += `
-      <tr class="hover:bg-slate-900/20 border-b border-slate-800/40">
-        <td class="py-3 px-4 font-medium text-slate-300">${a.nombre}</td>
-        <td class="py-3 px-4 text-slate-400 font-mono">${a.documento}</td>
-        <td class="py-3 px-4 text-slate-600 font-mono">-</td>
-        <td class="py-3 px-4 text-slate-600 font-mono">-</td>
-        <td class="py-3 px-4 text-center text-red-400">0 / 6h</td>
-        <td class="py-3 px-4 text-center text-xs text-slate-600">-</td>
-        <td class="py-3 px-4">
-          <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20">FALLA_TOTAL</span>
-        </td>
-        <td class="py-3 px-4 text-center">
-          <div class="flex items-center justify-center gap-1.5">
-            <button onclick="triggerManualLateCheckin('${a.documento}')" class="text-xs bg-orange-950/20 hover:bg-orange-950/40 border border-orange-500/20 text-orange-400 px-2 py-1 rounded-md transition-all">
-              Ingreso Retardado
-            </button>
-            <button onclick="triggerManualOverride('${a.documento}', 6, 0, 'MANUAL_OVERRIDE')" class="text-xs bg-slate-800 hover:bg-slate-700 text-[#39A900] border border-[#39A900]/20 px-2 py-1 rounded-md transition-all">
-              Forzar Presente
             </button>
           </div>
         </td>

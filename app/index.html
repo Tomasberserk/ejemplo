@@ -8,6 +8,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <!-- QR Code Library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- HTML5 QR Scanner Library -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     body {
       font-family: 'Outfit', sans-serif;
@@ -75,8 +77,71 @@
   <!-- Main Content Container -->
   <main class="flex-1 max-w-7xl mx-auto px-6 py-8 w-full flex flex-col">
 
+    <!-- PORTAL DE ENTRADA -->
+    <section id="portalScreen" class="flex-1 flex items-center justify-center py-12">
+      <div class="w-full max-w-md glass rounded-3xl p-8 shadow-2xl relative overflow-hidden text-center">
+        <div class="absolute -top-10 -right-10 w-32 h-32 bg-[#39A900]/10 rounded-full blur-2xl"></div>
+        <div class="absolute -bottom-10 -left-10 w-32 h-32 bg-[#003049]/20 rounded-full blur-2xl"></div>
+
+        <div class="mb-8 relative z-10">
+          <div class="h-16 w-16 bg-[#39A900]/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#39A900]/20">
+            <svg class="w-8 h-8 text-[#39A900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+          </div>
+          <h2 class="text-3xl font-extrabold tracking-tight text-white">Registro de Asistencia</h2>
+          <p class="text-slate-400 text-sm mt-2">Sistema Digital de Control SENA</p>
+        </div>
+
+        <div class="space-y-4 relative z-10">
+          <button 
+            id="btnGoToScanner"
+            class="w-full bg-[#39A900] hover:bg-[#329200] active:scale-[0.98] text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg shadow-[#39A900]/20 flex items-center justify-center gap-3 text-lg"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 20h2M4 12h2m0 0H4m-2 0h2m14-4V4m0 8h2m-2-4h-2m-8 8v4m0 0v-4m-2 4h2M4 20h2m-2 0V16m2 4h2m4-12h.01M16 16h.01M20 12h.01"/></svg>
+            Escanear QR de Asistencia
+          </button>
+          
+          <button 
+            id="btnGoToLogin"
+            class="w-full bg-slate-900/60 hover:bg-slate-800/80 active:scale-[0.98] border border-slate-700/50 text-slate-300 font-semibold py-3.5 px-6 rounded-xl transition-all flex items-center justify-center gap-2"
+          >
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+            Ingresar como Instructor
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANTALLA ESCANER QR -->
+    <section id="scannerScreen" class="hidden flex-1 flex items-center justify-center py-8">
+      <div class="w-full max-w-md glass rounded-3xl p-6 shadow-2xl relative overflow-hidden flex flex-col items-center">
+        <div class="absolute -top-10 -right-10 w-32 h-32 bg-[#39A900]/10 rounded-full blur-2xl"></div>
+        <div class="absolute -bottom-10 -left-10 w-32 h-32 bg-[#003049]/20 rounded-full blur-2xl"></div>
+
+        <div class="text-center mb-6 relative z-10 w-full">
+          <h2 class="text-2xl font-bold tracking-tight text-white">Escáner de Cámara</h2>
+          <p class="text-slate-400 text-sm mt-1">Apunta con la cámara al código QR del aula</p>
+        </div>
+
+        <!-- Camera box container -->
+        <div class="w-full aspect-square rounded-2xl overflow-hidden bg-black/40 border border-slate-700/60 relative mb-6 shadow-inner">
+          <div id="reader" class="w-full h-full"></div>
+        </div>
+
+        <div class="w-full space-y-3 relative z-10">
+          <div id="scannerFeedback" class="hidden p-3 rounded-xl text-center text-xs font-semibold"></div>
+          
+          <button 
+            id="btnCancelScanner"
+            class="w-full bg-slate-900/60 hover:bg-slate-800 border border-slate-700/50 text-slate-300 font-semibold py-3 px-6 rounded-xl transition-all"
+          >
+            ← Volver al Portal
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- LOGIN SCREEN -->
-    <section id="loginScreen" class="flex-1 flex items-center justify-center py-12">
+    <section id="loginScreen" class="hidden flex-1 flex items-center justify-center py-12">
       <div class="w-full max-w-md glass rounded-3xl p-8 shadow-2xl relative overflow-hidden">
         <!-- Blur ornaments -->
         <div class="absolute -top-10 -right-10 w-32 h-32 bg-[#39A900]/10 rounded-full blur-2xl"></div>

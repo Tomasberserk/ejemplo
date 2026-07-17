@@ -258,6 +258,53 @@ export const getSessionsHistory = async (req, res) => {
   }
 };
 
+// Helper to check session state and document existence
+export const checkDocument = async (req, res) => {
+  try {
+    const { documento } = req.body;
+    const { token } = req.params;
+
+    if (!documento || !token) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento y token QR son requeridos.' } });
+    }
+
+    // Find session
+    let session = null;
+    const activeSessions = await query("SELECT * FROM attendance_sessions WHERE status = 'active'");
+    for (const s of activeSessions) {
+      for (let i = -1; i <= 20; i++) {
+        const tok = generateQrToken(s.id, -i * 15000);
+        if (token === tok) { session = s; break; }
+      }
+      if (session) break;
+    }
+
+    if (!session) {
+      return res.status(400).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada o token QR inválido/vencido.' } });
+    }
+
+    if (session.status === 'closed') {
+      return res.status(400).json({ error: { code: 'SESSION_CLOSED', message: 'La sala está cerrada por el instructor.' } });
+    }
+
+    const now = new Date();
+    if (now > new Date(session.room_expires_at)) {
+      return res.status(400).json({ error: { code: 'ROOM_EXPIRED', message: 'La ventana de 15 minutos ha cerrado.' } });
+    }
+
+    // Check person
+    const person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [documento]);
+    return res.json({
+      data: {
+        exists: !!person,
+        documento
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
 // Check-in logic
 export const checkin = async (req, res) => {
   try {
@@ -329,6 +376,29 @@ export const checkin = async (req, res) => {
       `, [`rec_${Date.now()}`, session.id, session.institution_id, session.unit_id, person.id, documento, 'Aprendiz no está inscrito en esta ficha.', now.toISOString(), getClientIp(req)]);
 
       return res.status(400).json({ error: { code: 'NOT_ENROLLED', message: 'El aprendiz no pertenece a esta ficha.' } });
+    }
+
+    // PASSWORD VALIDATION
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: { code: 'PASSWORD_REQUIRED', message: 'La contraseña es requerida para identificar al estudiante.' } });
+    }
+
+    let isMatch = false;
+    if (person.password.startsWith('$2b$') || person.password.startsWith('$2a$')) {
+      isMatch = await bcrypt.compare(password, person.password);
+    } else {
+      isMatch = (password === person.password);
+    }
+
+    if (!isMatch) {
+      await run(`
+        INSERT INTO attendance_records (
+          id, session_id, institution_id, unit_id, person_id, documento, status, reject_reason, message, created_at, client_ip
+        ) VALUES (?, ?, ?, ?, ?, ?, 'rejected', 'INVALID_PASSWORD', ?, ?, ?)
+      `, [`rec_${Date.now()}`, session.id, session.institution_id, session.unit_id, person.id, documento, 'Contraseña incorrecta.', now.toISOString(), getClientIp(req)]);
+
+      return res.status(401).json({ error: { code: 'INVALID_PASSWORD', message: 'Contraseña incorrecta.' } });
     }
 
     // SECURITY CHECK: Subnet LAN / Client IP match

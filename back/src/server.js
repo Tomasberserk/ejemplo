@@ -30,7 +30,8 @@ import {
   selfRegisterCheckin,
   submitLateRequest,
   getInstructorLateRequests,
-  resolveLateRequest
+  resolveLateRequest,
+  checkDocument
 } from './controllers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -55,8 +56,9 @@ app.post('/attendance/checkin',                      checkin);
 app.post('/public/attendance/:token/register',        checkin);
 app.post('/public/attendance/:token/self-register',   selfRegisterCheckin);
 app.post('/public/attendance/:token/late-request',    submitLateRequest);
+app.post('/public/attendance/:token/check-document',  checkDocument);
 
-// ── QR Student Page (multi-step: check → register → dashboard → late) ─────────
+// ── QR Student Page (multi-step: check → login/register → dashboard → late) ──
 app.get('/attendance/:token', (req, res) => {
   const { token } = req.params;
   res.send(`<!DOCTYPE html>
@@ -131,14 +133,41 @@ app.get('/attendance/:token', (req, res) => {
     </p>
   </div>
 
-  <!-- SCREEN 2: Self Register (new student) -->
+  <!-- SCREEN 2: Student Login (existing student) -->
+  <div id="screen-student-login" class="screen">
+    <div class="text-center mb-6" style="position:relative;z-index:1">
+      <div style="display:inline-flex;padding:.85rem;background:rgba(57,169,0,.1);border:1px solid rgba(57,169,0,.2);border-radius:1rem;margin-bottom:.75rem">
+        <svg width="28" height="28" fill="none" stroke="#39A900" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+      </div>
+      <h2 style="font-size:1.2rem;font-weight:800;color:#fff;margin:0">Iniciar Sesión Estudiante</h2>
+      <p style="color:#64748b;font-size:.8rem;margin:.25rem 0 0">Identifícate con tu contraseña para registrar asistencia.</p>
+    </div>
+    <div id="feedback-student-login" class="hidden mb-4"></div>
+    <div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:.9rem">
+      <div>
+        <label class="input-label">Documento</label>
+        <input id="login-student-doc" type="text" readonly class="input-field" style="opacity:.6;cursor:not-allowed">
+      </div>
+      <div>
+        <label class="input-label">Contraseña</label>
+        <input id="login-student-pwd" type="password" placeholder="Ingresa tu contraseña" class="input-field">
+      </div>
+      <button class="btn-green" id="btn-student-login" onclick="doStudentLogin()">
+        <span id="btn-student-login-text">Confirmar Asistencia</span>
+        <svg id="btn-student-login-spin" class="hidden spin" width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="white" stroke-width="4" opacity=".25"/><path fill="white" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/></svg>
+      </button>
+      <button class="btn-ghost" onclick="showScreen('screen-check','')">← Volver</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 3: Self Register (new student) -->
   <div id="screen-register" class="screen">
     <div class="text-center mb-6" style="position:relative;z-index:1">
       <div style="display:inline-flex;padding:.85rem;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:1rem;margin-bottom:.75rem">
         <svg width="28" height="28" fill="none" stroke="#818cf8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
       </div>
       <h2 style="font-size:1.2rem;font-weight:800;color:#fff;margin:0">Crear tu cuenta</h2>
-      <p style="color:#64748b;font-size:.8rem;margin:.25rem 0 0">Eres nuevo en el sistema. Completa estos datos.</p>
+      <p style="color:#64748b;font-size:.8rem;margin:.25rem 0 0">Eres nuevo en el sistema. Completa tus datos.</p>
     </div>
     <div id="feedback-register" class="hidden mb-4"></div>
     <div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:.9rem">
@@ -151,7 +180,7 @@ app.get('/attendance/:token', (req, res) => {
         <input id="reg-nombre" type="text" placeholder="Tu nombre completo" class="input-field" autocomplete="name">
       </div>
       <div>
-        <label class="input-label">Contraseña (para tu portal)</label>
+        <label class="input-label">Crear Contraseña</label>
         <input id="reg-pwd" type="password" placeholder="Mínimo 6 caracteres" class="input-field">
       </div>
       <button class="btn-green" id="btn-register" onclick="doRegister()">
@@ -162,7 +191,7 @@ app.get('/attendance/:token', (req, res) => {
     </div>
   </div>
 
-  <!-- SCREEN 3: Dashboard (success) -->
+  <!-- SCREEN 4: Dashboard (success) -->
   <div id="screen-dashboard" class="screen">
     <div class="text-center mb-6" style="position:relative;z-index:1">
       <div id="dash-icon" style="font-size:3rem;margin-bottom:.5rem">✅</div>
@@ -195,7 +224,7 @@ app.get('/attendance/:token', (req, res) => {
     </div>
   </div>
 
-  <!-- SCREEN 4: Late Request -->
+  <!-- SCREEN 5: Late Request -->
   <div id="screen-late-form" class="screen">
     <div class="text-center mb-6" style="position:relative;z-index:1">
       <div style="display:inline-flex;padding:.85rem;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:1rem;margin-bottom:.75rem">
@@ -239,7 +268,8 @@ app.get('/attendance/:token', (req, res) => {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(id).classList.add('active');
     if (feedbackMsg) {
-      const fb = document.getElementById('feedback-' + id.replace('screen-','').replace('-form',''));
+      const screenName = id.replace('screen-','').replace('-form','');
+      const fb = document.getElementById('feedback-' + screenName);
       if (fb) showFeedback(fb, feedbackMsg, feedbackType || 'error');
     }
   }
@@ -247,6 +277,7 @@ app.get('/attendance/:token', (req, res) => {
   function showFeedback(el, msg, type) {
     el.textContent = msg;
     el.className = type === 'success' ? 'alert-success mb-4' : (type === 'warning' ? 'alert-warning mb-4' : 'alert-error mb-4');
+    el.classList.remove('hidden');
   }
 
   function setLoading(btnId, spinId, textId, loading, label) {
@@ -261,8 +292,9 @@ app.get('/attendance/:token', (req, res) => {
     if (!doc) return;
     setLoading('btn-check','btn-check-spin','btn-check-text', true, 'Continuar');
     document.getElementById('feedback-check').className = 'hidden mb-4';
+
     try {
-      const res = await fetch('/public/attendance/' + TOKEN + '/register', {
+      const res = await fetch('/public/attendance/' + TOKEN + '/check-document', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ documento: doc })
@@ -270,29 +302,67 @@ app.get('/attendance/:token', (req, res) => {
       const result = await res.json();
 
       if (res.ok) {
-        showDashboard(result.data);
-      } else if (result.error?.code === 'PERSON_NOT_FOUND') {
-        // New student → registration screen
-        document.getElementById('reg-doc').value = doc;
-        document.getElementById('reg-nombre').value = '';
-        document.getElementById('reg-pwd').value = '';
-        document.getElementById('feedback-register').className = 'hidden mb-4';
-        showScreen('screen-register', '');
-      } else if (['ROOM_EXPIRED','SESSION_CLOSED','SESSION_NOT_FOUND'].includes(result.error?.code)) {
-        document.getElementById('late-doc').value = doc;
-        showScreen('screen-late-form', '⏰ La ventana de registro ha cerrado. Solicita validación al instructor.', 'warning');
+        if (result.data.exists) {
+          // Student exists → Show login screen
+          document.getElementById('login-student-doc').value = doc;
+          document.getElementById('login-student-pwd').value = '';
+          document.getElementById('feedback-student-login').className = 'hidden mb-4';
+          showScreen('screen-student-login', '');
+        } else {
+          // New student → Show registration screen
+          document.getElementById('reg-doc').value = doc;
+          document.getElementById('reg-nombre').value = '';
+          document.getElementById('reg-pwd').value = '';
+          document.getElementById('feedback-register').className = 'hidden mb-4';
+          showScreen('screen-register', '');
+        }
       } else {
-        const fb = document.getElementById('feedback-check');
-        showFeedback(fb, '❌ ' + (result.error?.message || 'Error'), 'error');
+        if (['ROOM_EXPIRED','SESSION_CLOSED','SESSION_NOT_FOUND'].includes(result.error?.code)) {
+          document.getElementById('late-doc').value = doc;
+          showScreen('screen-late-form', '⏰ ' + result.error.message, 'warning');
+        } else {
+          showFeedback(document.getElementById('feedback-check'), '❌ ' + (result.error?.message || 'Error'), 'error');
+        }
       }
     } catch(e) {
-      showFeedback(document.getElementById('feedback-check'), '❌ Error de conexión.', 'error');
+      showFeedback(document.getElementById('feedback-check'), '❌ Error de conexión con el servidor.', 'error');
     } finally {
       setLoading('btn-check','btn-check-spin','btn-check-text', false, 'Continuar');
     }
   }
 
-  // ── STEP 2: Self Register ─────────────────────────────────────────────────
+  // ── STEP 2: Student Login (existing student check-in) ──────────────────────
+  async function doStudentLogin() {
+    const doc  = document.getElementById('login-student-doc').value.trim();
+    const pwd  = document.getElementById('login-student-pwd').value;
+    const fb   = document.getElementById('feedback-student-login');
+
+    if (!pwd) { showFeedback(fb, '❌ La contraseña es requerida.', 'error'); return; }
+
+    setLoading('btn-student-login','btn-student-login-spin','btn-student-login-text', true, 'Confirmar Asistencia');
+    fb.className = 'hidden mb-4';
+
+    try {
+      const res = await fetch('/public/attendance/' + TOKEN + '/register', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ documento: doc, password: pwd })
+      });
+      const result = await res.json();
+
+      if (res.ok) {
+        showDashboard(result.data);
+      } else {
+        showFeedback(fb, '❌ ' + (result.error?.message || 'Error al autenticar.'), 'error');
+      }
+    } catch(e) {
+      showFeedback(fb, '❌ Error de conexión.', 'error');
+    } finally {
+      setLoading('btn-student-login','btn-student-login-spin','btn-student-login-text', false, 'Confirmar Asistencia');
+    }
+  }
+
+  // ── STEP 3: Self Register (new student check-in) ──────────────────────────
   async function doRegister() {
     const doc    = document.getElementById('reg-doc').value.trim();
     const nombre = document.getElementById('reg-nombre').value.trim();
@@ -300,7 +370,7 @@ app.get('/attendance/:token', (req, res) => {
     const fb     = document.getElementById('feedback-register');
 
     if (!nombre) { showFeedback(fb, '❌ El nombre es requerido.', 'error'); return; }
-    if (pwd && pwd.length < 6) { showFeedback(fb, '❌ La contraseña debe tener mínimo 6 caracteres.', 'error'); return; }
+    if (!pwd || pwd.length < 6) { showFeedback(fb, '❌ La contraseña debe tener mínimo 6 caracteres.', 'error'); return; }
 
     setLoading('btn-register','btn-reg-spin','btn-reg-text', true, 'Registrarme y Marcar Asistencia');
     fb.className = 'hidden mb-4';
@@ -309,7 +379,7 @@ app.get('/attendance/:token', (req, res) => {
       const res = await fetch('/public/attendance/' + TOKEN + '/self-register', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ documento: doc, nombre, password: pwd || doc })
+        body: JSON.stringify({ documento: doc, nombre, password: pwd })
       });
       const result = await res.json();
 
@@ -331,7 +401,7 @@ app.get('/attendance/:token', (req, res) => {
     const isAlready = data.alreadyRegistered;
     const isNew     = data.isNewStudent;
 
-    document.getElementById('dash-icon').textContent     = isParcial ? '⏱️' : (isAlready ? '✅' : '✅');
+    document.getElementById('dash-icon').textContent     = isParcial ? '⏱️' : '✅';
     document.getElementById('dash-title').textContent    = isAlready ? '¡Ya estás registrado!' : '¡Asistencia Confirmada!';
     document.getElementById('dash-subtitle').textContent = isParcial ? 'Llegaste tarde. Se descontaron horas.' : 'Tu asistencia fue marcada exitosamente.';
     document.getElementById('dash-nombre').textContent   = data.nombre || '—';
@@ -355,7 +425,7 @@ app.get('/attendance/:token', (req, res) => {
     showScreen('screen-dashboard', '');
   }
 
-  // ── STEP 4: Late Request ──────────────────────────────────────────────────
+  // ── STEP 5: Late Request ──────────────────────────────────────────────────
   async function doLateRequest() {
     const doc     = document.getElementById('late-doc').value.trim();
     const nombre  = document.getElementById('late-nombre').value.trim();
@@ -398,6 +468,7 @@ app.get('/attendance/:token', (req, res) => {
     const active = document.querySelector('.screen.active');
     if (!active) return;
     if (active.id === 'screen-check') doCheck();
+    if (active.id === 'screen-student-login') doStudentLogin();
     if (active.id === 'screen-register') doRegister();
     if (active.id === 'screen-late-form') doLateRequest();
   });
@@ -405,7 +476,6 @@ app.get('/attendance/:token', (req, res) => {
 </body>
 </html>`);
 });
-
 // ── Protected routes (Instructor catalog & control) ───────────────────────────
 app.get('/api/institutions',                           authenticate, getInstitutions);
 app.get('/api/institutions/:institutionId/units',      authenticate, getUnits);
