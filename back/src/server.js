@@ -118,8 +118,17 @@ app.get('/attendance/:token', (req, res) => {
       <label class="input-label">Número de Documento</label>
       <input id="inp-doc" type="number" inputmode="numeric" autocomplete="off"
         placeholder="Ej: 1077228780"
-        class="input-field mb-4"
+        class="input-field mb-3"
         style="text-align:center;font-size:1.2rem;font-weight:700;letter-spacing:.05em">
+      
+      <!-- Input code manual fallback -->
+      <div id="manual-code-wrapper" class="mb-4">
+        <label class="input-label">Código Manual (Si falló la cámara)</label>
+        <input id="inp-manual-code" type="text" placeholder="Ej: A1B2C3" maxlength="6"
+          class="input-field"
+          style="text-align:center;font-size:1.1rem;font-weight:800;letter-spacing:.25em;text-transform:uppercase">
+      </div>
+
       <button class="btn-green" id="btn-check" onclick="doCheck()">
         <span id="btn-check-text">Continuar</span>
         <svg id="btn-check-spin" class="hidden spin" width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="white" stroke-width="4" opacity=".25"/><path fill="white" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/></svg>
@@ -262,7 +271,14 @@ app.get('/attendance/:token', (req, res) => {
 </div><!-- /wrapper -->
 
 <script>
-  const TOKEN = '${token}';
+  let activeToken = TOKEN;
+
+  // Show/hide manual code field dynamically
+  document.addEventListener('DOMContentLoaded', () => {
+    if (TOKEN === 'manual' || TOKEN === '') {
+      document.getElementById('manual-code-wrapper').classList.remove('hidden');
+    }
+  });
 
   function showScreen(id, feedbackMsg, feedbackType) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -289,12 +305,29 @@ app.get('/attendance/:token', (req, res) => {
   // ── STEP 1: Check document ────────────────────────────────────────────────
   async function doCheck() {
     const doc = document.getElementById('inp-doc').value.trim();
+    const manualVal = document.getElementById('inp-manual-code').value.trim();
+
     if (!doc) return;
+
+    // Determine active token to use
+    if (manualVal) {
+      if (manualVal.length !== 6) {
+        showFeedback(document.getElementById('feedback-check'), '❌ El código manual debe tener exactamente 6 caracteres.', 'error');
+        return;
+      }
+      activeToken = manualVal;
+    } else if (TOKEN === 'manual' || TOKEN === '') {
+      showFeedback(document.getElementById('feedback-check'), '❌ Por favor ingresa el código manual del instructor.', 'error');
+      return;
+    } else {
+      activeToken = TOKEN;
+    }
+
     setLoading('btn-check','btn-check-spin','btn-check-text', true, 'Continuar');
     document.getElementById('feedback-check').className = 'hidden mb-4';
 
     try {
-      const res = await fetch('/public/attendance/' + TOKEN + '/check-document', {
+      const res = await fetch('/public/attendance/' + activeToken + '/check-document', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ documento: doc })
@@ -343,7 +376,7 @@ app.get('/attendance/:token', (req, res) => {
     fb.className = 'hidden mb-4';
 
     try {
-      const res = await fetch('/public/attendance/' + TOKEN + '/register', {
+      const res = await fetch('/public/attendance/' + activeToken + '/register', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ documento: doc, password: pwd })
@@ -376,7 +409,7 @@ app.get('/attendance/:token', (req, res) => {
     fb.className = 'hidden mb-4';
 
     try {
-      const res = await fetch('/public/attendance/' + TOKEN + '/self-register', {
+      const res = await fetch('/public/attendance/' + activeToken + '/self-register', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ documento: doc, nombre, password: pwd })

@@ -21,6 +21,15 @@ export const generateQrToken = (sessionId, timeOffset = 0) => {
     .substring(0, 12);
 };
 
+// Match input token dynamically (full 12-char QR token or 6-char manual code)
+export const matchToken = (inputToken, actualToken) => {
+  if (!inputToken || !actualToken) return false;
+  if (inputToken.length === 6) {
+    return actualToken.substring(0, 6).toUpperCase() === inputToken.toUpperCase();
+  }
+  return actualToken === inputToken;
+};
+
 // Check if two IPs are on the same subnet or sharing NAT
 const checkSameSubnetOrIp = (ip1, ip2) => {
   if (!ip1 || !ip2) return false;
@@ -274,7 +283,7 @@ export const checkDocument = async (req, res) => {
     for (const s of activeSessions) {
       for (let i = -1; i <= 20; i++) {
         const tok = generateQrToken(s.id, -i * 15000);
-        if (token === tok) { session = s; break; }
+        if (matchToken(token, tok)) { session = s; break; }
       }
       if (session) break;
     }
@@ -324,11 +333,10 @@ export const checkin = async (req, res) => {
       // Find session by matching rotating token (with 5-minute leeway = 20 blocks of 15s)
       const activeSessions = await query("SELECT * FROM attendance_sessions WHERE status = 'active'");
       for (const s of activeSessions) {
-        // Check next block (+1) and past blocks (up to 20 back)
         for (let i = -1; i <= 20; i++) {
           const offset = -i * 15000;
           const tok = generateQrToken(s.id, offset);
-          if (token === tok) {
+          if (matchToken(token, tok)) {
             session = s;
             break;
           }
@@ -954,7 +962,7 @@ export const selfRegisterCheckin = async (req, res) => {
     for (const s of activeSessions) {
       for (let i = -1; i <= 20; i++) {
         const tok = generateQrToken(s.id, -i * 15000);
-        if (token === tok) { session = s; break; }
+        if (matchToken(token, tok)) { session = s; break; }
       }
       if (session) break;
     }
@@ -1067,7 +1075,7 @@ export const submitLateRequest = async (req, res) => {
     for (const s of sessions) {
       for (let i = -1; i <= 480; i++) { // 480 x 15s = 2 hours
         const tok = generateQrToken(s.id, -i * 15000);
-        if (token === tok) { session = s; break; }
+        if (matchToken(token, tok)) { session = s; break; }
       }
       if (session) break;
     }

@@ -481,6 +481,10 @@ async function rotateQrCode() {
     if (res.ok) {
       const qrUrl = `${state.apiUrl}/attendance/${data.qrToken}`;
       
+      // Update manual code
+      const manualCode = data.qrToken.substring(0, 6).toUpperCase();
+      document.getElementById('qrManualCode').textContent = manualCode;
+
       // Clear container and render QR
       const qrContainer = document.getElementById('qrcode');
       qrContainer.innerHTML = '';
