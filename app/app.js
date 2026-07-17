@@ -75,6 +75,11 @@ const btnTabExcuses = document.getElementById('btnTabExcuses');
 const tabContentExcuses = document.getElementById('tabContentExcuses');
 const instructorExcusesGridBody = document.getElementById('instructorExcusesGridBody');
 
+const btnTabLateRequests = document.getElementById('btnTabLateRequests');
+const tabContentLateRequests = document.getElementById('tabContentLateRequests');
+const lateRequestsGridBody = document.getElementById('lateRequestsGridBody');
+const lateRequestsLoading = document.getElementById('lateRequestsLoading');
+
 // Search & Bulk Elements
 const searchStudentInput = document.getElementById('searchStudentInput');
 const btnBulkMarkPresent = document.getElementById('btnBulkMarkPresent');
@@ -679,9 +684,11 @@ btnTabControl.addEventListener('click', () => {
   btnTabControl.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-[#39A900] text-white transition-all';
   btnTabReport.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   btnTabExcuses.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabLateRequests.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   tabContentControl.classList.remove('hidden');
   tabContentReport.classList.add('hidden');
   tabContentExcuses.classList.add('hidden');
+  tabContentLateRequests.classList.add('hidden');
 });
 
 btnTabReport.addEventListener('click', () => {
@@ -689,9 +696,11 @@ btnTabReport.addEventListener('click', () => {
   btnTabReport.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-[#39A900] text-white transition-all';
   btnTabControl.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   btnTabExcuses.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabLateRequests.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   tabContentControl.classList.add('hidden');
   tabContentReport.classList.remove('hidden');
   tabContentExcuses.classList.add('hidden');
+  tabContentLateRequests.classList.add('hidden');
   fetchReportData();
 });
 
@@ -700,10 +709,25 @@ btnTabExcuses.addEventListener('click', () => {
   btnTabExcuses.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-[#39A900] text-white transition-all';
   btnTabControl.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   btnTabReport.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabLateRequests.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   tabContentControl.classList.add('hidden');
   tabContentReport.classList.add('hidden');
   tabContentExcuses.classList.remove('hidden');
+  tabContentLateRequests.classList.add('hidden');
   fetchInstructorExcuses();
+});
+
+btnTabLateRequests.addEventListener('click', () => {
+  state.activeTab = 'lateRequests';
+  btnTabLateRequests.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-[#39A900] text-white transition-all';
+  btnTabControl.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabReport.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabExcuses.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  tabContentControl.classList.add('hidden');
+  tabContentReport.classList.add('hidden');
+  tabContentExcuses.classList.add('hidden');
+  tabContentLateRequests.classList.remove('hidden');
+  fetchLateRequests();
 });
 
 // Report View Fetch
@@ -1029,6 +1053,117 @@ window.resolveExcuse = async (id, status) => {
     }
   } catch (err) {
     alert('Error al resolver excusa.');
+  }
+};
+
+// --- LATE REQUESTS LOGIC ---
+async function fetchLateRequests() {
+  lateRequestsLoading.classList.remove('hidden');
+  lateRequestsGridBody.innerHTML = '';
+  try {
+    const res = await fetch(`${state.apiUrl}/api/instructor/late-requests`, {
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    const result = await res.json();
+    if (res.ok) {
+      renderLateRequests(result.data);
+    } else {
+      console.error('Error fetching late requests:', result.error.message);
+      lateRequestsGridBody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-red-400">Error al cargar solicitudes.</td></tr>`;
+    }
+  } catch (err) {
+    console.error('Error fetching late requests:', err);
+    lateRequestsGridBody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-red-400">Error de conexión.</td></tr>`;
+  } finally {
+    lateRequestsLoading.classList.add('hidden');
+  }
+}
+
+function renderLateRequests(requests) {
+  lateRequestsGridBody.innerHTML = '';
+
+  if (!requests || requests.length === 0) {
+    lateRequestsGridBody.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-center py-8 text-slate-500">No hay solicitudes tardías pendientes.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  requests.forEach(r => {
+    let statusBadge = '<span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">PENDIENTE</span>';
+    if (r.status === 'approved') {
+      statusBadge = '<span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-500/10 text-green-400 border border-green-500/20">APROBADA</span>';
+    } else if (r.status === 'rejected') {
+      statusBadge = '<span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20">RECHAZADA</span>';
+    }
+
+    let actionsCol = '-';
+    if (r.status === 'pending') {
+      actionsCol = `
+        <div class="flex items-center justify-center gap-1.5">
+          <select id="lateHoras_${r.id}" class="bg-slate-900 border border-slate-800 rounded-md px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-[#39A900]">
+            <option value="1">1h</option>
+            <option value="2">2h</option>
+            <option value="3">3h</option>
+            <option value="4">4h</option>
+            <option value="5">5h</option>
+          </select>
+          <button onclick="resolveLateRequest('${r.id}', 'approved')" class="text-xs bg-[#39A900]/15 hover:bg-[#39A900]/25 border border-[#39A900]/20 text-[#39A900] px-2 py-1 rounded-md transition-all font-semibold">
+            Aprobar
+          </button>
+          <button onclick="resolveLateRequest('${r.id}', 'rejected')" class="text-xs bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-2 py-1 rounded-md transition-all font-semibold">
+            Rechazar
+          </button>
+        </div>
+      `;
+    }
+
+    const sentAt = r.created_at ? new Date(r.created_at).toLocaleString('es-CO') : '-';
+
+    lateRequestsGridBody.innerHTML += `
+      <tr class="hover:bg-slate-900/20 border-b border-slate-800/40">
+        <td class="py-3 px-4 font-medium text-slate-200">${r.student_name || '-'}</td>
+        <td class="py-3 px-4 text-slate-400 font-mono">${r.student_doc || '-'}</td>
+        <td class="py-3 px-4 text-xs font-semibold text-slate-400">${r.unit_code || '-'}</td>
+        <td class="py-3 px-4 font-mono text-xs">${sentAt}</td>
+        <td class="py-3 px-4 text-xs max-w-xs truncate" title="${r.justification || ''}">${r.justification || '-'}</td>
+        <td class="py-3 px-4">${statusBadge}</td>
+        <td class="py-3 px-4 text-center">${actionsCol}</td>
+      </tr>
+    `;
+  });
+}
+
+window.resolveLateRequest = async (id, status) => {
+  const horasSelect = document.getElementById(`lateHoras_${id}`);
+  const horasDescontar = horasSelect ? parseInt(horasSelect.value) : 1;
+
+  const confirmMsg = status === 'approved'
+    ? `¿Aprobar solicitud tardía descontando ${horasDescontar} hora(s)?`
+    : '¿Rechazar esta solicitud tardía? La inasistencia permanecerá en el sistema.';
+
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const res = await fetch(`${state.apiUrl}/api/instructor/late-requests/${id}/resolve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.token}`
+      },
+      body: JSON.stringify({ status, horasDescontar })
+    });
+    const result = await res.json();
+    if (res.ok) {
+      alert('Solicitud tardía procesada correctamente.');
+      fetchLateRequests();
+    } else {
+      alert(`Error: ${result.error.message}`);
+    }
+  } catch (err) {
+    alert('Error al resolver la solicitud tardía.');
   }
 };
 
