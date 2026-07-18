@@ -1103,17 +1103,14 @@ export const submitLateRequest = async (req, res) => {
 // ── GET INSTRUCTOR LATE REQUESTS ──────────────────────────────────────────────
 export const getInstructorLateRequests = async (req, res) => {
   try {
-    const { person } = req;
+    const person = req.user;
 
-    // Get all units this instructor teaches
+    // Get all units in this instructor's institution
     const units = await query(`
-      SELECT DISTINCT s.unit_id
-      FROM attendance_sessions s
-      JOIN people p ON p.id = ?
-      WHERE s.institution_id = (SELECT institution_id FROM people WHERE id = ?)
-    `, [person.id, person.id]);
+      SELECT id FROM academic_units WHERE institution_id = ?
+    `, [person.institutionId]);
 
-    const unitIds = units.map(u => u.unit_id);
+    const unitIds = units.map(u => u.id);
 
     if (unitIds.length === 0) {
       return res.json({ data: [] });
