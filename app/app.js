@@ -1614,7 +1614,7 @@ window.editFicha = (id, code, name, active) => {
   fichaModalTitle.textContent = "Editar Ficha";
   fichaEditId.value = id;
   fichaCode.value = code;
-  fichaCode.disabled = true; // No permitir cambiar código en edición
+  fichaCode.disabled = false; // Permitir cambiar el código en edición
   fichaName.value = name;
   fichaActive.checked = active === 1 || active === true;
   fichaActiveWrapper.classList.remove('hidden');
