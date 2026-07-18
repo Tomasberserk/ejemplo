@@ -130,6 +130,30 @@
         <div class="w-full space-y-3 relative z-10">
           <div id="scannerFeedback" class="hidden p-3 rounded-xl text-center text-xs font-semibold"></div>
           
+          <!-- Separador -->
+          <div class="flex items-center gap-3 my-2">
+            <div class="flex-1 h-px bg-slate-700/60"></div>
+            <span class="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">¿No funciona la cámara?</span>
+            <div class="flex-1 h-px bg-slate-700/60"></div>
+          </div>
+
+          <!-- Manual code input -->
+          <div class="flex gap-2">
+            <input 
+              id="scannerManualCode"
+              type="text" 
+              maxlength="6" 
+              placeholder="Código de 6 caracteres"
+              class="flex-1 bg-slate-900/60 border border-slate-700/50 rounded-xl px-4 py-3 text-center text-white font-mono text-lg tracking-[.3em] uppercase placeholder:text-slate-600 placeholder:text-xs placeholder:tracking-normal placeholder:font-sans focus:outline-none focus:border-[#39A900] focus:ring-1 focus:ring-[#39A900]/30 transition-all"
+            >
+            <button 
+              id="btnScannerManualGo"
+              class="bg-[#39A900] hover:bg-[#329200] active:scale-95 text-white font-bold px-5 rounded-xl transition-all shadow-lg shadow-[#39A900]/20 flex items-center justify-center"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            </button>
+          </div>
+
           <button 
             id="btnCancelScanner"
             class="w-full bg-slate-900/60 hover:bg-slate-800 border border-slate-700/50 text-slate-300 font-semibold py-3 px-6 rounded-xl transition-all"

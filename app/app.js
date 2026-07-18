@@ -119,6 +119,23 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnGoToLogin').addEventListener('click', showLogin);
   document.getElementById('btnCancelScanner').addEventListener('click', showPortal);
 
+  // Manual code from scanner screen
+  document.getElementById('btnScannerManualGo').addEventListener('click', () => {
+    const code = document.getElementById('scannerManualCode').value.trim().toUpperCase();
+    if (code.length < 6) {
+      const fb = document.getElementById('scannerFeedback');
+      fb.textContent = 'Ingresa el código completo de 6 caracteres.';
+      fb.className = 'p-3 rounded-xl text-center text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20';
+      fb.classList.remove('hidden');
+      return;
+    }
+    stopQrScanner();
+    window.location.href = `/attendance/${code}`;
+  });
+  document.getElementById('scannerManualCode').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('btnScannerManualGo').click();
+  });
+
   if (state.token && state.person) {
     showDashboard();
   } else {
