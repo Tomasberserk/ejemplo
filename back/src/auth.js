@@ -87,3 +87,14 @@ export const authenticate = (req, res, next) => {
     });
   }
 };
+
+export const requireRole = (...allowedRoles) => (req, res, next) => {
+  const userRoles = req.user.roles || [];
+  const hasRole = allowedRoles.some(r => userRoles.includes(r));
+  if (!hasRole) {
+    return res.status(403).json({
+      error: { code: 'FORBIDDEN', message: 'No tienes permisos para realizar esta acción.' }
+    });
+  }
+  next();
+};

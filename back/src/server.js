@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { initDb } from './db.js';
-import { login, authenticate } from './auth.js';
+import { login, authenticate, requireRole } from './auth.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {
@@ -31,7 +31,13 @@ import {
   submitLateRequest,
   getInstructorLateRequests,
   resolveLateRequest,
-  checkDocument
+  checkDocument,
+  getCoordInstructors,
+  createInstructor,
+  updateInstructor,
+  getCoordFichas,
+  createFicha,
+  updateFicha
 } from './controllers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -544,6 +550,14 @@ app.post('/api/instructor/excuses/:id/resolve',        authenticate, resolveExcu
 // Instructor Late Requests
 app.get('/api/instructor/late-requests',               authenticate, getInstructorLateRequests);
 app.post('/api/instructor/late-requests/:id/resolve',  authenticate, resolveLateRequest);
+
+// ── Coordinator Endpoints ──────────────────────────────────────────────────────
+app.get('/api/coord/instructors',                      authenticate, requireRole('COORDINADOR'), getCoordInstructors);
+app.post('/api/coord/instructors',                     authenticate, requireRole('COORDINADOR'), createInstructor);
+app.put('/api/coord/instructors/:id',                  authenticate, requireRole('COORDINADOR'), updateInstructor);
+app.get('/api/coord/fichas',                           authenticate, requireRole('COORDINADOR'), getCoordFichas);
+app.post('/api/coord/fichas',                          authenticate, requireRole('COORDINADOR'), createFicha);
+app.put('/api/coord/fichas/:id',                       authenticate, requireRole('COORDINADOR'), updateFicha);
 
 // ── Error Handling ────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {

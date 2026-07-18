@@ -1194,3 +1194,157 @@ export const resolveLateRequest = async (req, res) => {
   }
 };
 
+// ── COORDINATOR CONTROLLERS ───────────────────────────────────────────────────
+
+export const getCoordInstructors = async (req, res) => {
+  try {
+    const institutionId = req.user.institutionId;
+    const rows = await query(
+      `SELECT id, documento, nombre, active, roles FROM people 
+       WHERE institution_id = ? AND roles LIKE '%INSTRUCTOR%'
+       ORDER BY nombre ASC`,
+      [institutionId]
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const createInstructor = async (req, res) => {
+  try {
+    const { documento, nombre, password } = req.body;
+    const institutionId = req.user.institutionId;
+
+    if (!documento || !nombre || !password) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento, nombre y contraseña son requeridos.' } });
+    }
+
+    const existing = await get(
+      'SELECT id FROM people WHERE documento = ? AND institution_id = ?',
+      [documento, institutionId]
+    );
+    if (existing) {
+      return res.status(409).json({ error: { code: 'DUPLICATE_ERROR', message: 'Ya existe un usuario con ese documento.' } });
+    }
+
+    const hashedPwd = await bcrypt.hash(password, 10);
+    const id = `per_inst_${Date.now()}`;
+    await run(
+      `INSERT INTO people (id, institution_id, documento, nombre, matricula, active, password, roles)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+      [id, institutionId, documento, nombre, `MAT-${documento}`, hashedPwd, JSON.stringify(['INSTRUCTOR'])]
+    );
+
+    res.status(201).json({ data: { id, documento, nombre, active: 1, roles: ['INSTRUCTOR'] } });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const updateInstructor = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nombre, password, active } = req.body;
+    const institutionId = req.user.institutionId;
+
+    const instructor = await get('SELECT * FROM people WHERE id = ? AND institution_id = ?', [id, institutionId]);
+    if (!instructor) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Instructor no encontrado.' } });
+    }
+
+    let queryStr = 'UPDATE people SET nombre = ?, active = ?';
+    let params = [nombre !== undefined ? nombre : instructor.nombre, active !== undefined ? Number(active) : instructor.active];
+
+    if (password) {
+      const hashedPwd = await bcrypt.hash(password, 10);
+      queryStr += ', password = ?';
+      params.push(hashedPwd);
+    }
+
+    queryStr += ' WHERE id = ?';
+    params.push(id);
+
+    await run(queryStr, params);
+
+    res.json({ data: { id, message: 'Instructor actualizado con éxito.' } });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const getCoordFichas = async (req, res) => {
+  try {
+    const institutionId = req.user.institutionId;
+    const rows = await query(
+      `SELECT au.id, au.code, au.name, au.active, COUNT(e.id) as learners_count
+       FROM academic_units au
+       LEFT JOIN enrollments e ON au.id = e.unit_id AND e.active = 1
+       WHERE au.institution_id = ? AND au.type = 'ficha'
+       GROUP BY au.id
+       ORDER BY au.code ASC`,
+      [institutionId]
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const createFicha = async (req, res) => {
+  try {
+    const { code, name } = req.body;
+    const institutionId = req.user.institutionId;
+
+    if (!code || !name) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Código y nombre son requeridos.' } });
+    }
+
+    const existing = await get(
+      'SELECT id FROM academic_units WHERE code = ? AND institution_id = ?',
+      [code, institutionId]
+    );
+    if (existing) {
+      return res.status(409).json({ error: { code: 'DUPLICATE_ERROR', message: 'Ya existe una ficha con ese código.' } });
+    }
+
+    const id = `unit_ficha_${code}`;
+    await run(
+      `INSERT INTO academic_units (id, institution_id, code, name, type, active)
+       VALUES (?, ?, ?, ?, 'ficha', 1)`,
+      [id, institutionId, code, name]
+    );
+
+    res.status(201).json({ data: { id, code, name, active: 1, learners_count: 0 } });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+export const updateFicha = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { code, name, active } = req.body;
+    const institutionId = req.user.institutionId;
+
+    const unit = await get('SELECT * FROM academic_units WHERE id = ? AND institution_id = ?', [id, institutionId]);
+    if (!unit) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Ficha no encontrada.' } });
+    }
+
+    const queryStr = 'UPDATE academic_units SET code = ?, name = ?, active = ? WHERE id = ?';
+    const params = [
+      code !== undefined ? code : unit.code,
+      name !== undefined ? name : unit.name,
+      active !== undefined ? Number(active) : unit.active,
+      id
+    ];
+
+    await run(queryStr, params);
+
+    res.json({ data: { id, message: 'Ficha actualizada con éxito.' } });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+

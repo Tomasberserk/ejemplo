@@ -77,8 +77,40 @@ const instructorExcusesGridBody = document.getElementById('instructorExcusesGrid
 
 const btnTabLateRequests = document.getElementById('btnTabLateRequests');
 const tabContentLateRequests = document.getElementById('tabContentLateRequests');
-const lateRequestsGridBody = document.getElementById('lateRequestsGridBody');
 const lateRequestsLoading = document.getElementById('lateRequestsLoading');
+
+// Coordinator Elements
+const coordDashboardScreen = document.getElementById('coordDashboardScreen');
+const btnCoordTabInstructors = document.getElementById('btnCoordTabInstructors');
+const btnCoordTabFichas = document.getElementById('btnCoordTabFichas');
+const tabContentInstructors = document.getElementById('tabContentInstructors');
+const tabContentFichas = document.getElementById('tabContentFichas');
+const coordInstructorsGridBody = document.getElementById('coordInstructorsGridBody');
+const coordFichasGridBody = document.getElementById('coordFichasGridBody');
+
+const btnNewInstructor = document.getElementById('btnNewInstructor');
+const btnNewFicha = document.getElementById('btnNewFicha');
+const instructorModal = document.getElementById('instructorModal');
+const fichaModal = document.getElementById('fichaModal');
+const instructorForm = document.getElementById('instructorForm');
+const fichaForm = document.getElementById('fichaForm');
+const btnCancelInstructor = document.getElementById('btnCancelInstructor');
+const btnCancelFicha = document.getElementById('btnCancelFicha');
+
+const instructorModalTitle = document.getElementById('instructorModalTitle');
+const instructorEditId = document.getElementById('instructorEditId');
+const instNombre = document.getElementById('instNombre');
+const instDocumento = document.getElementById('instDocumento');
+const instPassword = document.getElementById('instPassword');
+const instActiveWrapper = document.getElementById('instActiveWrapper');
+const instActive = document.getElementById('instActive');
+
+const fichaModalTitle = document.getElementById('fichaModalTitle');
+const fichaEditId = document.getElementById('fichaEditId');
+const fichaCode = document.getElementById('fichaCode');
+const fichaName = document.getElementById('fichaName');
+const fichaActiveWrapper = document.getElementById('fichaActiveWrapper');
+const fichaActive = document.getElementById('fichaActive');
 
 // Search & Bulk Elements
 const searchStudentInput = document.getElementById('searchStudentInput');
@@ -136,6 +168,53 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') document.getElementById('btnScannerManualGo').click();
   });
 
+  // Coordinator Tab bindings
+  btnCoordTabInstructors.addEventListener('click', () => {
+    btnCoordTabInstructors.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-[#39A900] text-white transition-all";
+    btnCoordTabFichas.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white transition-all";
+    tabContentInstructors.classList.remove('hidden');
+    tabContentFichas.classList.add('hidden');
+    fetchCoordInstructors();
+  });
+
+  btnCoordTabFichas.addEventListener('click', () => {
+    btnCoordTabFichas.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-[#39A900] text-white transition-all";
+    btnCoordTabInstructors.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white transition-all";
+    tabContentFichas.classList.remove('hidden');
+    tabContentInstructors.classList.add('hidden');
+    fetchCoordFichas();
+  });
+
+  // Coordinator Modal openers
+  btnNewInstructor.addEventListener('click', () => {
+    instructorModalTitle.textContent = "Registrar Nuevo Instructor";
+    instructorEditId.value = "";
+    instNombre.value = "";
+    instDocumento.value = "";
+    instDocumento.disabled = false;
+    instPassword.value = "";
+    instPassword.required = true;
+    instActiveWrapper.classList.add('hidden');
+    instructorModal.classList.remove('hidden');
+  });
+
+  btnNewFicha.addEventListener('click', () => {
+    fichaModalTitle.textContent = "Registrar Nueva Ficha";
+    fichaEditId.value = "";
+    fichaCode.value = "";
+    fichaCode.disabled = false;
+    fichaName.value = "";
+    fichaActiveWrapper.classList.add('hidden');
+    fichaModal.classList.remove('hidden');
+  });
+
+  btnCancelInstructor.addEventListener('click', () => instructorModal.classList.add('hidden'));
+  btnCancelFicha.addEventListener('click', () => fichaModal.classList.add('hidden'));
+
+  // Coordinator form submits
+  instructorForm.addEventListener('submit', handleInstructorSubmit);
+  fichaForm.addEventListener('submit', handleFichaSubmit);
+
   if (state.token && state.person) {
     showDashboard();
   } else {
@@ -191,6 +270,7 @@ function showPortal() {
   loginScreen.classList.add('hidden');
   dashboardScreen.classList.add('hidden');
   studentDashboardScreen.classList.add('hidden');
+  coordDashboardScreen.classList.add('hidden');
   userInfo.classList.add('hidden');
   stopQrScanner();
 }
@@ -252,6 +332,7 @@ function showLogin() {
   loginScreen.classList.remove('hidden');
   dashboardScreen.classList.add('hidden');
   studentDashboardScreen.classList.add('hidden');
+  coordDashboardScreen.classList.add('hidden');
   userInfo.classList.add('hidden');
   stopQrScanner();
 }
@@ -264,14 +345,31 @@ function showDashboard() {
   userName.textContent = state.person.nombre;
   stopQrScanner();
 
-  const isInstructor = state.person.roles.includes('INSTRUCTOR');
-  if (isInstructor) {
+  const roles = state.person.roles || [];
+  const isCoord = roles.includes('COORDINADOR');
+  const isInstructor = roles.includes('INSTRUCTOR');
+
+  if (isCoord) {
+    coordDashboardScreen.classList.remove('hidden');
+    dashboardScreen.classList.add('hidden');
+    studentDashboardScreen.classList.add('hidden');
+    
+    // Set active tab to instructors visually
+    btnCoordTabInstructors.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-[#39A900] text-white transition-all";
+    btnCoordTabFichas.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white transition-all";
+    tabContentInstructors.classList.remove('hidden');
+    tabContentFichas.classList.add('hidden');
+
+    fetchCoordInstructors();
+  } else if (isInstructor) {
+    coordDashboardScreen.classList.add('hidden');
     dashboardScreen.classList.remove('hidden');
     studentDashboardScreen.classList.add('hidden');
     loadFichas();
     checkForActiveSession();
     fetchInstructorExcuses();
   } else {
+    coordDashboardScreen.classList.add('hidden');
     dashboardScreen.classList.add('hidden');
     studentDashboardScreen.classList.remove('hidden');
     fetchStudentHistory();
@@ -1291,3 +1389,260 @@ btnBulkMarkPresent.addEventListener('click', async () => {
     btnBulkMarkPresent.textContent = originalText;
   }
 });
+
+// ── COORDINATOR FUNCTIONS ─────────────────────────────────────────────────────
+
+async function fetchCoordInstructors() {
+  coordInstructorsGridBody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-slate-500">Cargando instructores...</td></tr>';
+  try {
+    const res = await fetch(`${state.apiUrl}/api/coord/instructors`, {
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    const result = await res.json();
+    if (res.ok) {
+      renderCoordInstructors(result.data);
+    } else {
+      coordInstructorsGridBody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-red-400">Error: ${result.error.message}</td></tr>`;
+    }
+  } catch (err) {
+    coordInstructorsGridBody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-red-400">Error de conexión.</td></tr>';
+  }
+}
+
+function renderCoordInstructors(instructors) {
+  coordInstructorsGridBody.innerHTML = '';
+  if (!instructors || instructors.length === 0) {
+    coordInstructorsGridBody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-slate-500">No hay instructores registrados.</td></tr>';
+    return;
+  }
+
+  instructors.forEach(inst => {
+    const statusText = inst.active 
+      ? '<span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-green-500/10 text-green-400 border border-green-500/20">ACTIVO</span>'
+      : '<span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-red-500/10 text-red-400 border border-red-500/20">INACTIVO</span>';
+
+    const toggleText = inst.active ? 'Desactivar' : 'Activar';
+
+    coordInstructorsGridBody.innerHTML += `
+      <tr class="hover:bg-slate-900/20 border-b border-slate-800/40">
+        <td class="py-3 px-4 font-semibold text-slate-200">${inst.nombre}</td>
+        <td class="py-3 px-4 font-mono text-slate-400">${inst.documento}</td>
+        <td class="py-3 px-4">${statusText}</td>
+        <td class="py-3 px-4 text-right">
+          <div class="flex justify-end gap-2">
+            <button onclick="editInstructor('${inst.id}', '${inst.nombre}', '${inst.documento}', ${inst.active})" class="text-xs bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 px-2.5 py-1 rounded-md transition-all">
+              Editar
+            </button>
+            <button onclick="toggleInstructorActive('${inst.id}', '${inst.nombre}', ${inst.active})" class="text-xs bg-slate-900 border border-slate-800 hover:bg-slate-800 text-red-400 px-2.5 py-1 rounded-md transition-all">
+              ${toggleText}
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+async function handleInstructorSubmit(e) {
+  e.preventDefault();
+  const id = instructorEditId.value;
+  const nombre = instNombre.value.trim();
+  const documento = instDocumento.value.trim();
+  const password = instPassword.value.trim();
+  const active = instActive.checked;
+
+  const url = id 
+    ? `${state.apiUrl}/api/coord/instructors/${id}`
+    : `${state.apiUrl}/api/coord/instructors`;
+
+  const method = id ? 'PUT' : 'POST';
+  const bodyData = { nombre, documento };
+  if (password) bodyData.password = password;
+  if (id) bodyData.active = active;
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.token}`
+      },
+      body: JSON.stringify(bodyData)
+    });
+    const result = await res.json();
+    if (res.ok) {
+      alert(id ? 'Instructor actualizado correctamente.' : 'Instructor creado correctamente.');
+      instructorModal.classList.add('hidden');
+      fetchCoordInstructors();
+    } else {
+      alert(`Error: ${result.error.message}`);
+    }
+  } catch (err) {
+    alert('Error al guardar el instructor.');
+  }
+}
+
+window.editInstructor = (id, nombre, documento, active) => {
+  instructorModalTitle.textContent = "Editar Instructor";
+  instructorEditId.value = id;
+  instNombre.value = nombre;
+  instDocumento.value = documento;
+  instDocumento.disabled = true; // No permitir cambiar documento en edición
+  instPassword.value = "";
+  instPassword.required = false; // No obligatorio en edición
+  instActive.checked = active === 1 || active === true;
+  instActiveWrapper.classList.remove('hidden');
+  instructorModal.classList.remove('hidden');
+};
+
+window.toggleInstructorActive = async (id, nombre, currentActive) => {
+  const nextActive = currentActive ? 0 : 1;
+  const verb = currentActive ? 'desactivar' : 'activar';
+  if (!confirm(`¿Estás seguro de que deseas ${verb} al instructor ${nombre}?`)) return;
+
+  try {
+    const res = await fetch(`${state.apiUrl}/api/coord/instructors/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.token}`
+      },
+      body: JSON.stringify({ active: nextActive })
+    });
+    const result = await res.json();
+    if (res.ok) {
+      alert('Estado actualizado correctamente.');
+      fetchCoordInstructors();
+    } else {
+      alert(`Error: ${result.error.message}`);
+    }
+  } catch (err) {
+    alert('Error al actualizar el estado del instructor.');
+  }
+};
+
+async function fetchCoordFichas() {
+  coordFichasGridBody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-slate-500">Cargando fichas...</td></tr>';
+  try {
+    const res = await fetch(`${state.apiUrl}/api/coord/fichas`, {
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    const result = await res.json();
+    if (res.ok) {
+      renderCoordFichas(result.data);
+    } else {
+      coordFichasGridBody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-400">Error: ${result.error.message}</td></tr>`;
+    }
+  } catch (err) {
+    coordFichasGridBody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-red-400">Error de conexión.</td></tr>';
+  }
+}
+
+function renderCoordFichas(fichas) {
+  coordFichasGridBody.innerHTML = '';
+  if (!fichas || fichas.length === 0) {
+    coordFichasGridBody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-slate-500">No hay fichas registradas.</td></tr>';
+    return;
+  }
+
+  fichas.forEach(f => {
+    const statusText = f.active 
+      ? '<span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-green-500/10 text-green-400 border border-green-500/20">ACTIVA</span>'
+      : '<span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-red-500/10 text-red-400 border border-red-500/20">INACTIVA</span>';
+
+    const toggleText = f.active ? 'Desactivar' : 'Activar';
+
+    coordFichasGridBody.innerHTML += `
+      <tr class="hover:bg-slate-900/20 border-b border-slate-800/40">
+        <td class="py-3 px-4 font-mono font-semibold text-[#39A900]">${f.code}</td>
+        <td class="py-3 px-4 text-slate-200">${f.name}</td>
+        <td class="py-3 px-4 text-center font-semibold text-slate-400">${f.learners_count || 0}</td>
+        <td class="py-3 px-4">${statusText}</td>
+        <td class="py-3 px-4 text-right">
+          <div class="flex justify-end gap-2">
+            <button onclick="editFicha('${f.id}', '${f.code}', '${f.name}', ${f.active})" class="text-xs bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 px-2.5 py-1 rounded-md transition-all">
+              Editar
+            </button>
+            <button onclick="toggleFichaActive('${f.id}', '${f.name}', ${f.active})" class="text-xs bg-slate-900 border border-slate-800 hover:bg-slate-800 text-red-400 px-2.5 py-1 rounded-md transition-all">
+              ${toggleText}
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+async function handleFichaSubmit(e) {
+  e.preventDefault();
+  const id = fichaEditId.value;
+  const code = fichaCode.value.trim();
+  const name = fichaName.value.trim();
+  const active = fichaActive.checked;
+
+  const url = id 
+    ? `${state.apiUrl}/api/coord/fichas/${id}`
+    : `${state.apiUrl}/api/coord/fichas`;
+
+  const method = id ? 'PUT' : 'POST';
+  const bodyData = { code, name };
+  if (id) bodyData.active = active;
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.token}`
+      },
+      body: JSON.stringify(bodyData)
+    });
+    const result = await res.json();
+    if (res.ok) {
+      alert(id ? 'Ficha actualizada correctamente.' : 'Ficha creada correctamente.');
+      fichaModal.classList.add('hidden');
+      fetchCoordFichas();
+    } else {
+      alert(`Error: ${result.error.message}`);
+    }
+  } catch (err) {
+    alert('Error al guardar la ficha.');
+  }
+}
+
+window.editFicha = (id, code, name, active) => {
+  fichaModalTitle.textContent = "Editar Ficha";
+  fichaEditId.value = id;
+  fichaCode.value = code;
+  fichaCode.disabled = true; // No permitir cambiar código en edición
+  fichaName.value = name;
+  fichaActive.checked = active === 1 || active === true;
+  fichaActiveWrapper.classList.remove('hidden');
+  fichaModal.classList.remove('hidden');
+};
+
+window.toggleFichaActive = async (id, nombre, currentActive) => {
+  const nextActive = currentActive ? 0 : 1;
+  const verb = currentActive ? 'desactivar' : 'activar';
+  if (!confirm(`¿Estás seguro de que deseas ${verb} la ficha ${nombre}?`)) return;
+
+  try {
+    const res = await fetch(`${state.apiUrl}/api/coord/fichas/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.token}`
+      },
+      body: JSON.stringify({ active: nextActive })
+    });
+    const result = await res.json();
+    if (res.ok) {
+      alert('Estado actualizado correctamente.');
+      fetchCoordFichas();
+    } else {
+      alert(`Error: ${result.error.message}`);
+    }
+  } catch (err) {
+    alert('Error al actualizar el estado de la ficha.');
+  }
+};

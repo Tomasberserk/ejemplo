@@ -316,6 +316,13 @@ export async function initDb() {
       pInstId, instId, '1079606375', 'Instructor SENA', 'MAT-002', passInstructor, JSON.stringify(['INSTRUCTOR'])
     ]);
 
+    // Seed Coordinator (roles JSON has COORDINADOR)
+    const passCoord = await bcrypt.hash('coord.2026', 10);
+    await run(`
+      INSERT INTO people (id, institution_id, documento, nombre, matricula, active, password, roles)
+      VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+    `, ['per_coord_1', instId, '9999999999', 'Coordinador SENA', 'MAT-COORD', passCoord, JSON.stringify(['COORDINADOR'])]);
+
     // Seed Aprendices (documento as password)
     const learners = [
       { id: 'per_apr_1', doc: '1001001001', name: 'Juan Perez',       mat: 'MAT-A1', units: [unit1Id] },
