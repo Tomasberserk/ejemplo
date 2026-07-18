@@ -271,6 +271,7 @@ app.get('/attendance/:token', (req, res) => {
 </div><!-- /wrapper -->
 
 <script>
+  const TOKEN = '${token}';
   let activeToken = TOKEN;
 
   // Show/hide manual code field dynamically
