@@ -333,13 +333,6 @@ export async function initDb() {
       pInstId, instId, '1079606375', 'Instructor SENA', 'MAT-002', passInstructor, JSON.stringify(['INSTRUCTOR'])
     ]);
 
-    // Seed Coordinator (roles JSON has COORDINADOR)
-    const passCoord = await bcrypt.hash('coord.2026', 10);
-    await run(`
-      INSERT INTO people (id, institution_id, documento, nombre, matricula, active, password, roles)
-      VALUES (?, ?, ?, ?, ?, 1, ?, ?)
-    `, ['per_coord_1', instId, '9999999999', 'Coordinador SENA', 'MAT-COORD', passCoord, JSON.stringify(['COORDINADOR'])]);
-
     // Seed Aprendices (documento as password)
     const learners = [
       { id: 'per_apr_1', doc: '1001001001', name: 'Juan Perez',       mat: 'MAT-A1', units: [unit1Id] },
@@ -366,6 +359,31 @@ export async function initDb() {
     }
 
     console.log('Database seeded successfully!');
+  }
+
+  // Incondicional: Asegurar que el Coordinador exista en la BD (local o Vercel)
+  try {
+    const existingCoord = await get("SELECT id FROM people WHERE documento = '9999999999'");
+    if (!existingCoord) {
+      const instId = 'inst_sena_1';
+      // Ensure institution SENA exists first (just in case)
+      const inst = await get("SELECT id FROM institutions WHERE id = ?", [instId]);
+      if (!inst) {
+        await run(`
+          INSERT INTO institutions (id, code, name, context, labels, theme, qr_ttl_minutes, active)
+          VALUES (?, 'SENA', 'Servicio Nacional de Aprendizaje', 'sena', ?, ?, 10, 1)
+        `, [instId, JSON.stringify({ role: 'Instructor', unit: 'Ficha', person: 'Aprendiz' }), JSON.stringify({ primary: '#39A900', secondary: '#003049' })]);
+      }
+
+      const passCoord = await bcrypt.hash('coord.2026', 10);
+      await run(`
+        INSERT INTO people (id, institution_id, documento, nombre, matricula, active, password, roles)
+        VALUES (?, ?, '9999999999', 'Coordinador SENA', 'MAT-COORD', 1, ?, ?)
+      `, ['per_coord_1', instId, passCoord, JSON.stringify(['COORDINADOR'])]);
+      console.log('Database Init: Seeded Coordinator 9999999999 successfully!');
+    }
+  } catch (err) {
+    console.error('Error ensuring Coordinator seed:', err.message);
   }
 }
 
