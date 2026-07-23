@@ -281,6 +281,33 @@ export async function initDb() {
     console.error('Migration error (non-fatal) attendance_sessions.ip_check_enabled:', migErr.message);
   }
 
+  // Migration: Add evidence columns to attendance_sessions
+  try {
+    if (isPostgres) {
+      try {
+        await run(`ALTER TABLE attendance_sessions ADD COLUMN evidence_submitted INTEGER DEFAULT 0`);
+      } catch (err) {
+        if (err.code !== '42701') throw err;
+      }
+      try {
+        await run(`ALTER TABLE attendance_sessions ADD COLUMN evidence_submitted_at TEXT`);
+      } catch (err) {
+        if (err.code !== '42701') throw err;
+      }
+      console.log('Migration: Added evidence columns to attendance_sessions in Postgres');
+    } else {
+      const columns = await query(`PRAGMA table_info(attendance_sessions)`);
+      const hasEvidence = columns.some(col => col.name === 'evidence_submitted');
+      if (!hasEvidence) {
+        await run(`ALTER TABLE attendance_sessions ADD COLUMN evidence_submitted INTEGER DEFAULT 0`);
+        await run(`ALTER TABLE attendance_sessions ADD COLUMN evidence_submitted_at TEXT`);
+        console.log('Migration: Added evidence columns to attendance_sessions in SQLite');
+      }
+    }
+  } catch (migErr) {
+    console.error('Migration error (non-fatal) attendance_sessions.evidence:', migErr.message);
+  }
+
   // Seed data if institutions is empty
   // NOTE: PostgreSQL returns COUNT(*) as string (bigint), use Number() to compare
   const instCount = await get('SELECT COUNT(*) as count FROM institutions');

@@ -38,7 +38,9 @@ import {
   getCoordFichas,
   createFicha,
   updateFicha,
-  studentLateCheckin
+  studentLateCheckin,
+  submitSessionEvidence,
+  getCoordEvidences
 } from './controllers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -558,6 +560,7 @@ app.post('/api/instructor/excuses/:id/resolve',        authenticate, resolveExcu
 // Instructor Late Requests
 app.get('/api/instructor/late-requests',               authenticate, getInstructorLateRequests);
 app.post('/api/instructor/late-requests/:id/resolve',  authenticate, resolveLateRequest);
+app.post('/api/sessions/:sessionId/evidence',          authenticate, submitSessionEvidence);
 
 // ── Coordinator Endpoints ──────────────────────────────────────────────────────
 app.get('/api/coord/instructors',                      authenticate, requireRole('COORDINADOR'), getCoordInstructors);
@@ -566,6 +569,7 @@ app.put('/api/coord/instructors/:id',                  authenticate, requireRole
 app.get('/api/coord/fichas',                           authenticate, requireRole('COORDINADOR'), getCoordFichas);
 app.post('/api/coord/fichas',                          authenticate, requireRole('COORDINADOR'), createFicha);
 app.put('/api/coord/fichas/:id',                       authenticate, requireRole('COORDINADOR'), updateFicha);
+app.get('/api/coord/evidences',                        authenticate, requireRole('COORDINADOR'), getCoordEvidences);
 
 // ── Error Handling ────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {

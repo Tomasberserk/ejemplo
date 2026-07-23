@@ -56,6 +56,8 @@ const attendanceGridBody = document.getElementById('attendanceGridBody');
 const btnRefreshGrid = document.getElementById('btnRefreshGrid');
 const reportGridBody = document.getElementById('reportGridBody');
 const btnPrintReport = document.getElementById('btnPrintReport');
+const btnDownloadPdfReport = document.getElementById('btnDownloadPdfReport');
+const btnSubmitEvidence = document.getElementById('btnSubmitEvidence');
 
 // Student Dashboard & Excuses Elements
 const studentDashboardScreen = document.getElementById('studentDashboardScreen');
@@ -83,10 +85,13 @@ const lateRequestsLoading = document.getElementById('lateRequestsLoading');
 const coordDashboardScreen = document.getElementById('coordDashboardScreen');
 const btnCoordTabInstructors = document.getElementById('btnCoordTabInstructors');
 const btnCoordTabFichas = document.getElementById('btnCoordTabFichas');
+const btnCoordTabEvidences = document.getElementById('btnCoordTabEvidences');
 const tabContentInstructors = document.getElementById('tabContentInstructors');
 const tabContentFichas = document.getElementById('tabContentFichas');
+const tabContentEvidences = document.getElementById('tabContentEvidences');
 const coordInstructorsGridBody = document.getElementById('coordInstructorsGridBody');
 const coordFichasGridBody = document.getElementById('coordFichasGridBody');
+const coordEvidencesGridBody = document.getElementById('coordEvidencesGridBody');
 
 const btnNewInstructor = document.getElementById('btnNewInstructor');
 const btnNewFicha = document.getElementById('btnNewFicha');
@@ -172,17 +177,31 @@ document.addEventListener('DOMContentLoaded', () => {
   btnCoordTabInstructors.addEventListener('click', () => {
     btnCoordTabInstructors.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-[#39A900] text-white transition-all";
     btnCoordTabFichas.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white transition-all";
+    btnCoordTabEvidences.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white transition-all";
     tabContentInstructors.classList.remove('hidden');
     tabContentFichas.classList.add('hidden');
+    tabContentEvidences.classList.add('hidden');
     fetchCoordInstructors();
   });
 
   btnCoordTabFichas.addEventListener('click', () => {
     btnCoordTabFichas.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-[#39A900] text-white transition-all";
     btnCoordTabInstructors.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white transition-all";
+    btnCoordTabEvidences.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white transition-all";
     tabContentFichas.classList.remove('hidden');
     tabContentInstructors.classList.add('hidden');
+    tabContentEvidences.classList.add('hidden');
     fetchCoordFichas();
+  });
+
+  btnCoordTabEvidences.addEventListener('click', () => {
+    btnCoordTabEvidences.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-[#39A900] text-white transition-all";
+    btnCoordTabInstructors.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white transition-all";
+    btnCoordTabFichas.className = "px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white transition-all";
+    tabContentEvidences.classList.remove('hidden');
+    tabContentInstructors.classList.add('hidden');
+    tabContentFichas.classList.add('hidden');
+    fetchCoordEvidences();
   });
 
   // Coordinator Modal openers
@@ -926,6 +945,8 @@ async function fetchReportData() {
   if (!state.activeSession) return;
 
   const btnPrint = document.getElementById('btnPrintReport');
+  const btnPdf = document.getElementById('btnDownloadPdfReport');
+  const btnEvidence = document.getElementById('btnSubmitEvidence');
   const warning = document.getElementById('reportWarning');
 
   try {
@@ -943,9 +964,24 @@ async function fetchReportData() {
       const isReopened = state.activeSession.is_reopened === 1;
       if (isReopened) {
         btnPrint.classList.remove('opacity-50', 'pointer-events-none');
+        btnPdf.classList.remove('opacity-50', 'pointer-events-none');
         warning.classList.add('hidden');
+
+        // Check if evidence is already submitted
+        if (state.activeSession.evidence_submitted === 1) {
+          btnEvidence.classList.add('pointer-events-none');
+          btnEvidence.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'opacity-50');
+          btnEvidence.classList.add('bg-teal-600');
+          btnEvidence.querySelector('span').textContent = 'Evidencia Entregada ✓';
+        } else {
+          btnEvidence.classList.remove('opacity-50', 'pointer-events-none', 'bg-teal-600');
+          btnEvidence.classList.add('bg-blue-600', 'hover:bg-blue-700');
+          btnEvidence.querySelector('span').textContent = 'Entregar Evidencia';
+        }
       } else {
         btnPrint.classList.add('opacity-50', 'pointer-events-none');
+        btnPdf.classList.add('opacity-50', 'pointer-events-none');
+        btnEvidence.classList.add('opacity-50', 'pointer-events-none');
         warning.classList.remove('hidden');
       }
     }
@@ -1024,6 +1060,142 @@ btnPrintReport.addEventListener('click', () => {
     XLSX.writeFile(workbook, filename);
   } catch (err) {
     alert('Error al generar el archivo Excel: ' + err.message);
+  }
+});
+
+// Download PDF report (SENA styled)
+btnDownloadPdfReport.addEventListener('click', () => {
+  if (!state.lastReportData || state.lastReportData.length === 0) {
+    alert('No hay datos disponibles para exportar.');
+    return;
+  }
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    // Logo & Header styling (SENA Green #39A900)
+    doc.setFillColor(57, 169, 0); // SENA Green
+    doc.rect(0, 0, 210, 35, 'F');
+
+    // Title
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('SENA - CONTROL DE ASISTENCIA DIGITAL', 14, 15);
+
+    // Subtitle
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text('Centro de Formación · Reporte Consolidado de Asistencia', 14, 22);
+    
+    // Details Box
+    doc.setFillColor(241, 245, 249);
+    doc.rect(14, 42, 182, 24, 'F');
+
+    doc.setTextColor(51, 65, 85);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FICHA / SECCIÓN:', 18, 48);
+    doc.text('INSTRUCTOR:', 18, 54);
+    doc.text('FECHA DE JORNADA:', 18, 60);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text(state.activeSession.unit_id.replace('unit_ficha_', ''), 60, 48);
+    doc.text(state.person.nombre, 60, 54);
+    
+    const dateStr = state.activeSession.activated_at 
+      ? new Date(state.activeSession.activated_at).toLocaleDateString('es-CO', { dateStyle: 'long' }) 
+      : 'No disponible';
+    doc.text(dateStr, 60, 60);
+
+    // Map table rows
+    const tableRows = state.lastReportData.map((r, index) => [
+      index + 1,
+      r.nombre,
+      r.documento,
+      `${r.horas_programadas}h`,
+      `${r.horas_asistidas}h`,
+      `${r.horas_falla}h`,
+      `${r.porcentaje_asistencia}%`,
+      r.tipo_registro,
+      r.hora_ingreso && r.hora_ingreso !== '-' ? `${r.hora_ingreso} / ${r.hora_salida || '-'}` : 'FALLA_TOTAL'
+    ]);
+
+    // Draw AutoTable
+    doc.autoTable({
+      startY: 72,
+      head: [['#', 'Aprendiz', 'Documento', 'Prog.', 'Asist.', 'Fallas', '% Jornada', 'Estado', 'Entrada / Salida']],
+      body: tableRows,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [57, 169, 0],
+        textColor: [255, 255, 255],
+        fontSize: 8.5,
+        fontStyle: 'bold'
+      },
+      bodyStyles: {
+        fontSize: 8,
+        textColor: [30, 41, 59]
+      },
+      columnStyles: {
+        0: { width: 8 },
+        3: { halign: 'center' },
+        4: { halign: 'center' },
+        5: { halign: 'center' },
+        6: { halign: 'center' }
+      },
+      margin: { left: 14, right: 14 }
+    });
+
+    const finalY = doc.lastAutoTable.finalY || 100;
+    
+    // Signatures layout
+    if (finalY + 45 < 297) {
+      doc.setDrawColor(203, 213, 225);
+      doc.line(20, finalY + 30, 85, finalY + 30);
+      doc.line(125, finalY + 30, 190, finalY + 30);
+
+      doc.setTextColor(100, 116, 139);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Firma del Instructor', 40, finalY + 34);
+      doc.text('Firma del Coordinador', 145, finalY + 34);
+    }
+
+    // Save PDF
+    const filename = `Reporte_Asistencia_${state.activeSession.unit_id.replace('unit_ficha_', '')}.pdf`;
+    doc.save(filename);
+  } catch (err) {
+    alert('Error al generar el reporte PDF: ' + err.message);
+  }
+});
+
+// Submit session evidence (Instructor)
+btnSubmitEvidence.addEventListener('click', async () => {
+  if (!state.activeSession) return;
+  if (!confirm('¿Estás seguro de que deseas enviar este reporte de asistencia como evidencia oficial al Coordinador? Esta acción no se puede deshacer.')) return;
+
+  try {
+    const res = await fetch(`${state.apiUrl}/api/sessions/${state.activeSession.id}/evidence`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.token}`
+      }
+    });
+    if (handleAuthError(res)) return;
+
+    const result = await res.json();
+    if (res.ok) {
+      alert('¡Evidencia entregada al Coordinador con éxito!');
+      state.activeSession.evidence_submitted = 1;
+      fetchReportData();
+    } else {
+      alert(`Error: ${result.error.message}`);
+    }
+  } catch (err) {
+    alert('Error de red al entregar la evidencia.');
   }
 });
 
@@ -1732,3 +1904,128 @@ window.toggleFichaActive = async (id, nombre, currentActive) => {
     alert('Error al actualizar el estado de la ficha.');
   }
 };
+
+// --- COORDINATOR EVIDENCES FUNCTIONS ---
+
+async function fetchCoordEvidences() {
+  coordEvidencesGridBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-500">Cargando histórico de jornadas...</td></tr>';
+  try {
+    const res = await fetch(`${state.apiUrl}/api/coord/evidences`, {
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    if (handleAuthError(res)) return;
+
+    const result = await res.json();
+    if (res.ok) {
+      renderCoordEvidences(result.data);
+    } else {
+      coordEvidencesGridBody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-red-400">Error: ${result.error.message}</td></tr>`;
+    }
+  } catch (err) {
+    coordEvidencesGridBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-red-400">Error de conexión.</td></tr>';
+  }
+}
+
+function renderCoordEvidences(evidences) {
+  coordEvidencesGridBody.innerHTML = '';
+  if (!evidences || evidences.length === 0) {
+    coordEvidencesGridBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-500">No se encontraron jornadas registradas en el sistema.</td></tr>';
+    return;
+  }
+
+  evidences.forEach(ev => {
+    const dateStr = ev.activated_at 
+      ? new Date(ev.activated_at).toLocaleDateString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) 
+      : 'No iniciada';
+
+    // Status Badges
+    const statusText = ev.status === 'closed' ? 'Cerrada' : (ev.status === 'active' ? 'Activa' : 'Borrador');
+    const statusClass = ev.status === 'closed' ? 'bg-slate-500/10 text-slate-400 border border-slate-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20';
+
+    // Evidence Badges
+    const evText = ev.evidence_submitted === 1 ? 'Entregada ✓' : 'Pendiente';
+    const evClass = ev.evidence_submitted === 1 ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20 font-bold' : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20';
+
+    // Download button is only active if session is closed/has records
+    const downloadBtn = `
+      <button 
+        onclick="window.downloadCoordExcelReport('${ev.id}', '${ev.ficha_code}')"
+        class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-xs font-bold rounded-lg text-slate-200 hover:text-white transition-all inline-flex items-center gap-1 border border-slate-700/60"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+        <span>Reporte Excel</span>
+      </button>
+    `;
+
+    coordEvidencesGridBody.innerHTML += `
+      <tr class="hover:bg-slate-900/20 border-b border-slate-800/40">
+        <td class="py-3.5 px-4 font-bold text-white font-mono">${ev.ficha_code} - ${ev.ficha_name}</td>
+        <td class="py-3.5 px-4 text-slate-300 font-medium">${ev.instructor_name || 'Sin asignar'}</td>
+        <td class="py-3.5 px-4 text-slate-400 font-mono text-xs">${dateStr}</td>
+        <td class="py-3.5 px-4">
+          <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${statusClass}">${statusText}</span>
+        </td>
+        <td class="py-3.5 px-4 text-center">
+          <span class="inline-flex px-2 py-0.5 rounded-full text-xs ${evClass}">${evText}</span>
+        </td>
+        <td class="py-3.5 px-4 text-right">
+          ${downloadBtn}
+        </td>
+      </tr>
+    `;
+  });
+}
+
+// Download Excel report on Coordinator click
+window.downloadCoordExcelReport = async (sessionId, fichaCode) => {
+  try {
+    const res = await fetch(`${state.apiUrl}/reports/session/${sessionId}`, {
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    if (handleAuthError(res)) return;
+
+    const reportData = await res.json();
+    if (!res.ok) {
+      alert(`Error al obtener los datos del reporte: ${reportData.error?.message || 'Error desconocido'}`);
+      return;
+    }
+
+    if (reportData.length === 0) {
+      alert('No hay registros de asistencia para esta jornada.');
+      return;
+    }
+
+    // Map to Spanish columns
+    const excelRows = reportData.map(r => ({
+      'Aprendiz': r.nombre,
+      'Documento': r.documento,
+      'Horas Programadas': r.horas_programadas,
+      'Horas Asistidas': r.horas_asistidas,
+      'Horas Falla': r.horas_falla,
+      '% Asistencia': r.porcentaje_asistencia + '%',
+      'Tipo de Registro': r.tipo_registro,
+      'Hora Ingreso': r.hora_ingreso,
+      'Hora Salida': r.hora_salida
+    }));
+
+    // Generate Excel
+    const worksheet = XLSX.utils.json_to_sheet(excelRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Asistencia');
+
+    // Widths auto-adjust
+    const maxLens = {};
+    excelRows.forEach(row => {
+      Object.keys(row).forEach(key => {
+        const valStr = String(row[key] || '');
+        maxLens[key] = Math.max(maxLens[key] || 10, valStr.length, key.length);
+      });
+    });
+    worksheet['!cols'] = Object.keys(maxLens).map(k => ({ wch: maxLens[k] + 2 }));
+
+    XLSX.writeFile(workbook, `Reporte_Jornada_${fichaCode}_${sessionId.substring(0, 8)}.xlsx`);
+  } catch (err) {
+    alert('Error al descargar el archivo Excel: ' + err.message);
+  }
+};
+

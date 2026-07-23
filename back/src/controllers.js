@@ -1448,3 +1448,62 @@ export const studentLateCheckin = async (req, res) => {
   }
 };
 
+// Submit session evidence (Instructor)
+export const submitSessionEvidence = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
+    if (!session) {
+      return res.status(404).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada.' } });
+    }
+
+    const now = new Date();
+    await run(`
+      UPDATE attendance_sessions
+      SET evidence_submitted = 1, evidence_submitted_at = ?
+      WHERE id = ?
+    `, [now.toISOString(), sessionId]);
+
+    res.json({ data: { message: 'Evidencia entregada al coordinador con éxito.' } });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Get all sessions / evidences (Coordinator)
+export const getCoordEvidences = async (req, res) => {
+  try {
+    const sessions = await query(`
+      SELECT 
+        s.id,
+        s.activated_at,
+        s.closed_at,
+        s.status,
+        s.evidence_submitted,
+        s.evidence_submitted_at,
+        u.code as ficha_code,
+        u.name as ficha_name,
+        p.nombre as instructor_name
+      FROM attendance_sessions s
+      JOIN academic_units u ON s.unit_id = u.id
+      LEFT JOIN enrollments e ON e.unit_id = s.unit_id
+      LEFT JOIN people p ON p.id = e.person_id AND p.roles LIKE '%INSTRUCTOR%'
+      ORDER BY s.activated_at DESC
+    `);
+    
+    // Deduplicate sessions
+    const seen = new Set();
+    const uniqueSessions = [];
+    for (const s of sessions) {
+      if (!seen.has(s.id)) {
+        seen.add(s.id);
+        uniqueSessions.push(s);
+      }
+    }
+
+    res.json({ data: uniqueSessions });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+

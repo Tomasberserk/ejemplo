@@ -12,6 +12,9 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <!-- SheetJS Library for Excel exports -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF Library for PDF exports -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
   <style>
     body {
       font-family: 'Outfit', sans-serif;
@@ -413,10 +416,22 @@
               <p class="text-xs text-slate-400 mt-0.5">Resumen acumulado del total de horas de la sesión</p>
             </div>
             
-            <button id="btnPrintReport" class="px-4 py-2 bg-[#39A900] hover:bg-[#329200] font-semibold text-xs rounded-xl transition-all flex items-center gap-2 shadow-md shadow-[#39A900]/10 opacity-50 pointer-events-none">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-              <span>Descargar Reporte Excel</span>
-            </button>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button id="btnPrintReport" class="px-4 py-2 bg-[#39A900] hover:bg-[#329200] font-semibold text-xs rounded-xl transition-all flex items-center gap-2 shadow-md shadow-[#39A900]/10 opacity-50 pointer-events-none">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <span>Descargar Excel</span>
+              </button>
+              
+              <button id="btnDownloadPdfReport" class="px-4 py-2 bg-red-600 hover:bg-red-700 font-semibold text-xs rounded-xl transition-all flex items-center gap-2 shadow-md shadow-red-600/10 opacity-50 pointer-events-none">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <span>Descargar PDF</span>
+              </button>
+
+              <button id="btnSubmitEvidence" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 font-semibold text-xs rounded-xl transition-all flex items-center gap-2 shadow-md shadow-blue-600/10 opacity-50 pointer-events-none">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-12 9h12m-12 4h12M9 10h.01M9 14h.01M9 18h.01"></path></svg>
+                <span>Entregar Evidencia</span>
+              </button>
+            </div>
           </div>
 
           <!-- Alert for closed/reopened session requirement -->
@@ -579,7 +594,10 @@
           Instructores
         </button>
         <button id="btnCoordTabFichas" class="px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white transition-all">
-          Fichas (Fichas)
+          Fichas
+        </button>
+        <button id="btnCoordTabEvidences" class="px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white transition-all">
+          Bandeja de Evidencias (Historial)
         </button>
       </div>
 
@@ -636,6 +654,34 @@
             <tbody id="coordFichasGridBody" class="divide-y divide-slate-800/40 text-slate-300">
               <tr>
                 <td colspan="5" class="text-center py-8 text-slate-500">Cargando fichas...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab Content: Evidences (History) -->
+      <div id="tabContentEvidences" class="glass rounded-3xl p-6 flex flex-col gap-4 overflow-hidden min-h-[400px] hidden">
+        <div class="flex justify-between items-center pb-2">
+          <h3 class="text-base font-bold text-white">Historial de Jornadas y Evidencias</h3>
+          <p class="text-xs text-slate-400">Inspecciona y descarga el reporte consolidado de asistencia de las sesiones cerradas por los instructores.</p>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 text-xs font-semibold">
+                <th class="py-3 px-4">Ficha</th>
+                <th class="py-3 px-4">Instructor</th>
+                <th class="py-3 px-4">Fecha de Clase</th>
+                <th class="py-3 px-4">Estado Jornada</th>
+                <th class="py-3 px-4 text-center">Estado Evidencia</th>
+                <th class="py-3 px-4 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="coordEvidencesGridBody" class="divide-y divide-slate-800/40 text-slate-300">
+              <tr>
+                <td colspan="6" class="text-center py-8 text-slate-500">Cargando histórico de jornadas...</td>
               </tr>
             </tbody>
           </table>
