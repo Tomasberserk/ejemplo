@@ -267,6 +267,18 @@
                   <label class="block text-xs font-medium text-slate-400 mb-1.5">Duración del QR (Minutos)</label>
                   <input type="number" id="inputQrTtl" value="15" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#39A900]">
                 </div>
+                <!-- IP Check Config Checkbox -->
+                <div class="flex items-center gap-2 pt-1 pb-2">
+                  <input 
+                    type="checkbox" 
+                    id="inputIpCheckEnabled" 
+                    class="rounded bg-slate-900 border-slate-800 text-[#39A900] focus:ring-0" 
+                    checked
+                  >
+                  <label for="inputIpCheckEnabled" class="text-xs text-slate-300 font-medium select-none cursor-pointer">
+                    Validar red IP local (WiFi aula)
+                  </label>
+                </div>
                 <button id="btnCreateRoom" class="w-full bg-[#39A900] hover:bg-[#329200] text-white font-semibold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
                   <span>Abrir Sala de Clase</span>
                 </button>

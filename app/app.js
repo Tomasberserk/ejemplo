@@ -431,6 +431,7 @@ async function checkForActiveSession() {
 btnCreateRoom.addEventListener('click', async () => {
   const unitId = selectFicha.value;
   const qrTtl = parseInt(inputQrTtl.value) || 15;
+  const ipCheckEnabled = document.getElementById('inputIpCheckEnabled').checked;
 
   if (!unitId) {
     alert('Por favor seleccione una ficha.');
@@ -447,7 +448,8 @@ btnCreateRoom.addEventListener('click', async () => {
       body: JSON.stringify({
         institutionId: state.person.institutionId,
         unitId,
-        qrTtlMinutes: qrTtl
+        qrTtlMinutes: qrTtl,
+        ipCheckEnabled
       })
     });
 

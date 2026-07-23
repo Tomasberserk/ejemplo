@@ -177,6 +177,7 @@ export async function initDb() {
       room_expires_at TEXT,
       is_reopened INTEGER,
       creator_ip TEXT,
+      ip_check_enabled INTEGER DEFAULT 1,
       FOREIGN KEY(institution_id) REFERENCES institutions(id),
       FOREIGN KEY(unit_id) REFERENCES academic_units(id)
     )
@@ -238,10 +239,9 @@ export async function initDb() {
     )
   `);
 
-  // Migration: Add created_at column if not exists
+  // Migration: Add created_at column to late_requests if not exists
   try {
     if (isPostgres) {
-      // PostgreSQL migration check
       const checkCol = await query(`
         SELECT column_name 
         FROM information_schema.columns 
@@ -252,7 +252,6 @@ export async function initDb() {
         console.log('Migration: Added created_at column to late_requests in Postgres');
       }
     } else {
-      // SQLite migration check
       const columns = await query(`PRAGMA table_info(late_requests)`);
       const hasCreatedAt = columns.some(col => col.name === 'created_at');
       if (!hasCreatedAt) {
@@ -261,7 +260,31 @@ export async function initDb() {
       }
     }
   } catch (migErr) {
-    console.error('Migration error (non-fatal):', migErr.message);
+    console.error('Migration error (non-fatal) late_requests:', migErr.message);
+  }
+
+  // Migration: Add ip_check_enabled column to attendance_sessions if not exists
+  try {
+    if (isPostgres) {
+      const checkCol = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name='attendance_sessions' and column_name='ip_check_enabled'
+      `);
+      if (checkCol.length === 0) {
+        await run(`ALTER TABLE attendance_sessions ADD COLUMN ip_check_enabled INTEGER DEFAULT 1`);
+        console.log('Migration: Added ip_check_enabled column to attendance_sessions in Postgres');
+      }
+    } else {
+      const columns = await query(`PRAGMA table_info(attendance_sessions)`);
+      const hasIpCheck = columns.some(col => col.name === 'ip_check_enabled');
+      if (!hasIpCheck) {
+        await run(`ALTER TABLE attendance_sessions ADD COLUMN ip_check_enabled INTEGER DEFAULT 1`);
+        console.log('Migration: Added ip_check_enabled column to attendance_sessions in SQLite');
+      }
+    }
+  } catch (migErr) {
+    console.error('Migration error (non-fatal) attendance_sessions.ip_check_enabled:', migErr.message);
   }
 
   // Seed data if institutions is empty

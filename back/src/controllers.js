@@ -93,7 +93,7 @@ export const getPeople = async (req, res) => {
 // Room Controllers
 export const createRoom = async (req, res) => {
   try {
-    const { institutionId, unitId, qrTtlMinutes = 15 } = req.body;
+    const { institutionId, unitId, qrTtlMinutes = 15, ipCheckEnabled = true } = req.body;
     if (!institutionId || !unitId) {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'institutionId y unitId son requeridos.' } });
     }
@@ -115,12 +115,13 @@ export const createRoom = async (req, res) => {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 15 * 60000); // Strict 15 mins room timer
     const creatorIp = getClientIp(req);
+    const ipCheckVal = ipCheckEnabled ? 1 : 0;
 
     await run(`
       INSERT INTO attendance_sessions (
         id, institution_id, unit_id, status, qr_token, qr_expires_at, qr_ttl_minutes,
-        activated_at, room_created_at, room_expires_at, is_reopened, creator_ip
-      ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, ?)
+        activated_at, room_created_at, room_expires_at, is_reopened, creator_ip, ip_check_enabled
+      ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `, [
       sessionId, institutionId, unitId,
       generateQrToken(sessionId, 0),
@@ -129,7 +130,8 @@ export const createRoom = async (req, res) => {
       now.toISOString(),
       now.toISOString(),
       expiresAt.toISOString(),
-      creatorIp
+      creatorIp,
+      ipCheckVal
     ]);
 
     const createdSession = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
@@ -410,12 +412,12 @@ export const checkin = async (req, res) => {
     }
 
     // SECURITY CHECK: Subnet LAN / Client IP match
-    // NOTE: QR token rotation IS the authentication. Document just identifies the student.
     const clientIp = getClientIp(req);
     const creatorIp = session.creator_ip;
     const bypassIp = process.env.BYPASS_IP_CHECK === 'true';
+    const isIpCheckEnabled = session.ip_check_enabled !== 0;
 
-    if (!bypassIp && !checkSameSubnetOrIp(clientIp, creatorIp)) {
+    if (isIpCheckEnabled && !bypassIp && !checkSameSubnetOrIp(clientIp, creatorIp)) {
       await run(`
         INSERT INTO attendance_records (
           id, session_id, institution_id, unit_id, person_id, documento, status, reject_reason, message, created_at, client_ip
@@ -1013,6 +1015,27 @@ export const selfRegisterCheckin = async (req, res) => {
       const unit = await get('SELECT * FROM academic_units WHERE id = ?', [session.unit_id]);
       return res.status(200).json({
         data: { ...existingRecord, nombre: person.nombre, ficha: unit?.name || '', isNewStudent: false, alreadyRegistered: true }
+      });
+    }
+
+    // IP Subnet Validation
+    const clientIp = getClientIp(req);
+    const creatorIp = session.creator_ip;
+    const bypassIp = process.env.BYPASS_IP_CHECK === 'true';
+    const isIpCheckEnabled = session.ip_check_enabled !== 0;
+
+    if (isIpCheckEnabled && !bypassIp && !checkSameSubnetOrIp(clientIp, creatorIp)) {
+      await run(`
+        INSERT INTO attendance_records (
+          id, session_id, institution_id, unit_id, person_id, documento, status, reject_reason, message, created_at, client_ip
+        ) VALUES (?, ?, ?, ?, ?, ?, 'rejected', 'OUT_OF_SUBNET', ?, ?, ?)
+      `, [`rec_${Date.now()}`, session.id, session.institution_id, session.unit_id, person.id, documento, 'Fuera del rango local / Subred del docente (auto-registro).', now.toISOString(), clientIp]);
+
+      return res.status(400).json({
+        error: {
+          code: 'OUT_OF_SUBNET',
+          message: 'Tu dispositivo no está conectado a la misma subred local que el docente. Por favor conéctate al WiFi del aula.'
+        }
       });
     }
 
