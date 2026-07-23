@@ -304,7 +304,7 @@ export async function initDb() {
     ]);
 
     // Seed academic units (fichas)
-    const unit1Id = 'unit_ficha_2503399';
+    const unit1Id = 'unit_ficha_3413974';
     const unit2Id = 'unit_ficha_2503400';
     await run(`
       INSERT INTO academic_units (id, institution_id, code, name, type, active)
@@ -312,7 +312,7 @@ export async function initDb() {
       (?, ?, ?, ?, ?, 1),
       (?, ?, ?, ?, ?, 1)
     `, [
-      unit1Id, instId, '2503399', 'Análisis y Desarrollo de Software (ADSO)', 'ficha',
+      unit1Id, instId, '3413974', 'Análisis y Desarrollo de Software (ADSO)', 'ficha',
       unit2Id, instId, '2503400', 'Gestión de Redes de Datos', 'ficha'
     ]);
 
