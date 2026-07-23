@@ -10,6 +10,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <!-- HTML5 QR Scanner Library -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- SheetJS Library for Excel exports -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     body {
       font-family: 'Outfit', sans-serif;
@@ -408,13 +410,19 @@
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/60 pb-4">
             <div>
               <h3 class="text-lg font-bold text-white">Balance de Asistencia Fraccionada</h3>
-              <p class="text-xs text-slate-400 mt-0.5">Resumen acumulado del total de horas programadas (6 horas)</p>
+              <p class="text-xs text-slate-400 mt-0.5">Resumen acumulado del total de horas de la sesión</p>
             </div>
             
-            <button id="btnPrintReport" class="px-4 py-2 bg-[#39A900] hover:bg-[#329200] font-semibold text-xs rounded-xl transition-all flex items-center gap-2">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-              <span>Imprimir Reporte</span>
+            <button id="btnPrintReport" class="px-4 py-2 bg-[#39A900] hover:bg-[#329200] font-semibold text-xs rounded-xl transition-all flex items-center gap-2 shadow-md shadow-[#39A900]/10 opacity-50 pointer-events-none">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              <span>Descargar Reporte Excel</span>
             </button>
+          </div>
+
+          <!-- Alert for closed/reopened session requirement -->
+          <div id="reportWarning" class="p-4 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs flex items-center gap-2.5">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            <span>El reporte final en Excel se habilitará únicamente tras haber reabierto la sala para la fase de Salida de los aprendices.</span>
           </div>
 
           <div class="overflow-x-auto">

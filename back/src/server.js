@@ -37,7 +37,8 @@ import {
   updateInstructor,
   getCoordFichas,
   createFicha,
-  updateFicha
+  updateFicha,
+  studentLateCheckin
 } from './controllers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -63,6 +64,7 @@ app.post('/public/attendance/:token/register',        checkin);
 app.post('/public/attendance/:token/self-register',   selfRegisterCheckin);
 app.post('/public/attendance/:token/late-request',    submitLateRequest);
 app.post('/public/attendance/:token/check-document',  checkDocument);
+app.post('/public/attendance/:token/late-checkin',     studentLateCheckin);
 
 // ── QR Student Page (multi-step: check → login/register → dashboard → late) ──
 app.get('/attendance/:token', (req, res) => {

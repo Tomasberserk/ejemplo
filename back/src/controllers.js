@@ -55,6 +55,36 @@ const checkSameSubnetOrIp = (ip1, ip2) => {
   return false;
 };
 
+// Pure function to calculate attendance blocks based on arrival time
+export const calculateAttendanceBlocks = (activatedAtStr, arrivalTimeStr, durationHours = 6) => {
+  if (!activatedAtStr || !arrivalTimeStr) {
+    return { horasAsistidas: durationHours, horasFalla: 0, tipoRegistro: 'REGULAR', status: 'accepted' };
+  }
+  const activated = new Date(activatedAtStr);
+  const arrival = new Date(arrivalTimeStr);
+  const diffMs = Math.max(0, arrival.getTime() - activated.getTime());
+  const minutesElapsed = Math.floor(diffMs / 60000);
+
+  if (minutesElapsed <= 15) {
+    return {
+      horasAsistidas: durationHours,
+      horasFalla: 0,
+      tipoRegistro: 'REGULAR',
+      status: 'accepted'
+    };
+  }
+
+  const blocksLost = Math.min(durationHours, Math.ceil(minutesElapsed / 60));
+  const horasAsistidas = durationHours - blocksLost;
+
+  return {
+    horasAsistidas,
+    horasFalla: blocksLost,
+    tipoRegistro: `RETARDO_BLOQUE_${blocksLost}`,
+    status: horasAsistidas === 0 ? 'ASISTENCIA_PARCIAL' : 'ASISTENCIA_PARCIAL'
+  };
+};
+
 // Catalog Controllers
 export const getInstitutions = async (req, res) => {
   try {
@@ -465,30 +495,13 @@ export const checkin = async (req, res) => {
         return res.status(400).json({ error: { code: 'DUPLICATE_ENTRY', message: 'Ya registraste tu ingreso a esta clase.' } });
       }
 
-      // Calculate fractional attendance
-      const activatedTime = new Date(session.activated_at);
-      const minutesElapsed = Math.floor((now.getTime() - activatedTime.getTime()) / 60000);
-
+      // Calculate blocks of attendance using pure helper
+      const { horasAsistidas, horasFalla, tipoRegistro, status } = calculateAttendanceBlocks(
+        session.activated_at,
+        now.toISOString(),
+        6
+      );
       const horasProgramadas = 6;
-      let horasAsistidas = 6;
-      let horasFalla = 0;
-      let tipoRegistro = 'REGULAR';
-      let status = 'accepted';
-
-      if (minutesElapsed <= 15) {
-        // Punctuality window
-        horasAsistidas = 6;
-        horasFalla = 0;
-        tipoRegistro = 'REGULAR';
-        status = 'accepted';
-      } else {
-        // Late block discount
-        const hoursMissed = Math.min(horasProgramadas, Math.ceil(minutesElapsed / 60));
-        horasAsistidas = horasProgramadas - hoursMissed;
-        horasFalla = hoursMissed;
-        tipoRegistro = `RETARDO_BLOQUE_${hoursMissed}`;
-        status = 'ASISTENCIA_PARCIAL';
-      }
 
       const recId = `ast_${Date.now().toString().substring(5)}`;
       const horaIngreso = now.toTimeString().split(' ')[0];
@@ -599,28 +612,13 @@ export const manualLateCheckin = async (req, res) => {
       return res.status(400).json({ error: { code: 'DUPLICATE_ENTRY', message: 'El aprendiz ya tiene un registro de asistencia válido.' } });
     }
 
-    // Calculate fraction based on current time
-    const activatedTime = new Date(session.activated_at);
-    const minutesElapsed = Math.floor((now.getTime() - activatedTime.getTime()) / 60000);
-
+    // Calculate blocks of attendance using pure helper
+    const { horasAsistidas, horasFalla, tipoRegistro, status } = calculateAttendanceBlocks(
+      session.activated_at,
+      now.toISOString(),
+      6
+    );
     const horasProgramadas = 6;
-    let horasAsistidas = 6;
-    let horasFalla = 0;
-    let tipoRegistro = 'REGULAR';
-    let status = 'accepted';
-
-    if (minutesElapsed <= 15) {
-      horasAsistidas = 6;
-      horasFalla = 0;
-      tipoRegistro = 'REGULAR';
-      status = 'accepted';
-    } else {
-      const hoursMissed = Math.min(horasProgramadas, Math.ceil(minutesElapsed / 60));
-      horasAsistidas = horasProgramadas - hoursMissed;
-      horasFalla = hoursMissed;
-      tipoRegistro = `RETARDO_BLOQUE_${hoursMissed}`;
-      status = 'ASISTENCIA_PARCIAL';
-    }
 
     const recId = `ast_man_late_${Date.now().toString().substring(8)}`;
     const horaIngreso = now.toTimeString().split(' ')[0];
@@ -1039,19 +1037,13 @@ export const selfRegisterCheckin = async (req, res) => {
       });
     }
 
-    // Calculate attendance
-    const activatedTime = new Date(session.activated_at);
-    const minutesElapsed = Math.floor((now - activatedTime) / 60000);
+    // Calculate attendance blocks using pure helper
+    const { horasAsistidas, horasFalla, tipoRegistro, status } = calculateAttendanceBlocks(
+      session.activated_at,
+      now.toISOString(),
+      6
+    );
     const horasProgramadas = 6;
-    let horasAsistidas = 6, horasFalla = 0, tipoRegistro = 'REGULAR', status = 'accepted';
-
-    if (minutesElapsed > 15) {
-      const hoursMissed = Math.min(horasProgramadas, Math.ceil(minutesElapsed / 60));
-      horasAsistidas = horasProgramadas - hoursMissed;
-      horasFalla = hoursMissed;
-      tipoRegistro = `RETARDO_BLOQUE_${hoursMissed}`;
-      status = 'ASISTENCIA_PARCIAL';
-    }
 
     const recId = `ast_sr_${Date.now()}`;
     const horaIngreso = now.toTimeString().split(' ')[0];
@@ -1366,6 +1358,91 @@ export const updateFicha = async (req, res) => {
     await run(queryStr, params);
 
     res.json({ data: { id, message: 'Ficha actualizada con éxito.' } });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Student self late check-in
+export const studentLateCheckin = async (req, res) => {
+  try {
+    const { token, documento, password, justification } = req.body;
+    
+    if (!token || !documento || !password) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Token, documento y contraseña son requeridos.' } });
+    }
+
+    // Find person
+    const person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [documento]);
+    if (!person) {
+      return res.status(404).json({ error: { code: 'PERSON_NOT_FOUND', message: 'Persona no encontrada.' } });
+    }
+
+    // Check password
+    let isMatch = false;
+    if (person.password.startsWith('$2b$') || person.password.startsWith('$2a$')) {
+      isMatch = await bcrypt.compare(password, person.password);
+    } else {
+      isMatch = (password === person.password);
+    }
+
+    if (!isMatch) {
+      return res.status(401).json({ error: { code: 'INVALID_PASSWORD', message: 'Contraseña incorrecta.' } });
+    }
+
+    // Identify session from token
+    let session = null;
+    const sessions = await query("SELECT * FROM attendance_sessions WHERE status != 'draft' ORDER BY created_at DESC");
+    for (const s of sessions) {
+      for (let i = -1; i <= 480; i++) { // 2 hours window
+        const tok = generateQrToken(s.id, -i * 15000);
+        if (matchToken(token, tok)) { session = s; break; }
+      }
+      if (session) break;
+    }
+
+    if (!session) {
+      return res.status(400).json({ error: { code: 'SESSION_NOT_FOUND', message: 'No se pudo identificar una sesión de clase activa.' } });
+    }
+
+    // Check duplicate
+    const existing = await get("SELECT * FROM attendance_records WHERE session_id = ? AND person_id = ? AND status != 'rejected'", [session.id, person.id]);
+    if (existing) {
+      return res.status(400).json({ error: { code: 'DUPLICATE_ENTRY', message: 'Ya has registrado tu asistencia para esta clase.' } });
+    }
+
+    const now = new Date();
+    // Calculate blocks of attendance using pure helper
+    const { horasAsistidas, horasFalla, tipoRegistro, status } = calculateAttendanceBlocks(
+      session.activated_at,
+      now.toISOString(),
+      6
+    );
+
+    const recId = `ast_student_late_${Date.now().toString().substring(8)}`;
+    const horaIngreso = now.toTimeString().split(' ')[0];
+
+    await run(`
+      INSERT INTO attendance_records (
+        id, session_id, institution_id, unit_id, person_id, documento, status, message,
+        hora_ingreso_real, horas_programadas_sesion, horas_validadas_asistencia, horas_inasistencia_acumulada,
+        tipo_registro, created_at, client_ip
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      recId, session.id, session.institution_id, session.unit_id, person.id, documento, status,
+      justification || 'Registro tardío manual del estudiante.',
+      horaIngreso, 6, horasAsistidas, horasFalla, tipoRegistro, now.toISOString(), getClientIp(req)
+    ]);
+
+    res.status(201).json({
+      data: {
+        id: recId,
+        horas_validadas: horasAsistidas,
+        horas_inasistencia: horasFalla,
+        message: 'Asistencia tardía registrada con éxito.'
+      }
+    });
+
   } catch (err) {
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
   }

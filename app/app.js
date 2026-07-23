@@ -925,13 +925,29 @@ btnTabLateRequests.addEventListener('click', () => {
 async function fetchReportData() {
   if (!state.activeSession) return;
 
+  const btnPrint = document.getElementById('btnPrintReport');
+  const warning = document.getElementById('reportWarning');
+
   try {
     const res = await fetch(`${state.apiUrl}/reports/session/${state.activeSession.id}`, {
       headers: { 'Authorization': `Bearer ${state.token}` }
     });
+    if (handleAuthError(res)) return;
+
     const reportData = await res.json();
     if (res.ok) {
+      state.lastReportData = reportData;
       renderReportGrid(reportData);
+
+      // Condition: ONLY enable report if session is reopened (meaning both entry and exit rooms created)
+      const isReopened = state.activeSession.is_reopened === 1;
+      if (isReopened) {
+        btnPrint.classList.remove('opacity-50', 'pointer-events-none');
+        warning.classList.add('hidden');
+      } else {
+        btnPrint.classList.add('opacity-50', 'pointer-events-none');
+        warning.classList.remove('hidden');
+      }
     }
   } catch (err) {
     console.error('Error fetching report data:', err);
@@ -967,9 +983,48 @@ function renderReportGrid(data) {
   });
 }
 
-// Print report
+// Download Excel report
 btnPrintReport.addEventListener('click', () => {
-  window.print();
+  if (!state.lastReportData || state.lastReportData.length === 0) {
+    alert('No hay datos disponibles para exportar.');
+    return;
+  }
+
+  try {
+    // Map JSON to Spanish Columns
+    const excelRows = state.lastReportData.map(r => ({
+      'Aprendiz': r.nombre,
+      'Documento': r.documento,
+      'Horas Programadas': r.horas_programadas,
+      'Horas Asistidas': r.horas_asistidas,
+      'Horas Falla': r.horas_falla,
+      '% Asistencia': r.porcentaje_asistencia + '%',
+      'Tipo de Registro': r.tipo_registro,
+      'Hora Ingreso': r.hora_ingreso,
+      'Hora Salida': r.hora_salida
+    }));
+
+    // Create Excel book and sheet
+    const worksheet = XLSX.utils.json_to_sheet(excelRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Asistencia');
+
+    // Auto-adjust column widths
+    const maxLens = {};
+    excelRows.forEach(row => {
+      Object.keys(row).forEach(key => {
+        const valStr = String(row[key] || '');
+        maxLens[key] = Math.max(maxLens[key] || 10, valStr.length, key.length);
+      });
+    });
+    worksheet['!cols'] = Object.keys(maxLens).map(k => ({ wch: maxLens[k] + 2 }));
+
+    // Download xlsx
+    const filename = `Reporte_Asistencia_${state.activeSession.unit_id.replace('unit_ficha_', '')}.xlsx`;
+    XLSX.writeFile(workbook, filename);
+  } catch (err) {
+    alert('Error al generar el archivo Excel: ' + err.message);
+  }
 });
 
 // Create new session flow

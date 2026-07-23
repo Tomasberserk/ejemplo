@@ -335,12 +335,6 @@ export async function initDb() {
 
     // Seed Aprendices (documento as password)
     const learners = [
-      { id: 'per_apr_1', doc: '1001001001', name: 'Juan Perez',       mat: 'MAT-A1', units: [unit1Id] },
-      { id: 'per_apr_2', doc: '1002002002', name: 'Maria Lopez',      mat: 'MAT-A2', units: [unit1Id] },
-      { id: 'per_apr_3', doc: '1003003003', name: 'Carlos Gomez',     mat: 'MAT-A3', units: [unit1Id] },
-      { id: 'per_apr_4', doc: '1004004004', name: 'Ana Rodriguez',    mat: 'MAT-A4', units: [unit2Id] },
-      { id: 'per_apr_5', doc: '1005005005', name: 'Luis Martinez',    mat: 'MAT-A5', units: [unit2Id] },
-      { id: 'per_apr_6', doc: '1075508460', name: 'Aprendiz SENA Validado', mat: 'MAT-AV1', units: [unit1Id] },
       { id: 'per_apr_7', doc: '1077228780', name: 'Tomas Berserk',    mat: 'MAT-AV2', units: [unit1Id] }
     ];
 
@@ -384,6 +378,28 @@ export async function initDb() {
     }
   } catch (err) {
     console.error('Error ensuring Coordinator seed:', err.message);
+  }
+
+  // Incondicional: Limpiar la BD para dejar únicamente a Tomas Berserk
+  try {
+    // Delete enrollments for other people who are APRENDIZ
+    await run(`
+      DELETE FROM enrollments 
+      WHERE person_id NOT IN (
+        SELECT id FROM people 
+        WHERE documento = '1077228780' OR roles LIKE '%INSTRUCTOR%' OR roles LIKE '%COORDINADOR%'
+      )
+    `);
+    
+    // Delete people who are APRENDIZ and not Tomas
+    await run(`
+      DELETE FROM people 
+      WHERE documento NOT IN ('1077228780', '9999999999', '1079606375', '0000000001')
+      AND roles LIKE '%APRENDIZ%'
+    `);
+    console.log('Database Init: Student list cleaned successfully (Tomas Berserk kept).');
+  } catch (err) {
+    console.error('Database Init: Error cleaning students:', err.message);
   }
 }
 
