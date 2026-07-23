@@ -194,7 +194,7 @@ app.get('/attendance/:token', (req, res) => {
     <div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:.9rem">
       <div>
         <label class="input-label">Documento</label>
-        <input id="reg-doc" type="text" readonly class="input-field" style="opacity:.6;cursor:not-allowed">
+        <input id="reg-doc" type="number" inputmode="numeric" placeholder="Ingresa tu documento" class="input-field">
       </div>
       <div>
         <label class="input-label">Nombre completo</label>
