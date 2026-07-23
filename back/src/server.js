@@ -139,6 +139,12 @@ app.get('/attendance/:token', (req, res) => {
         <span id="btn-check-text">Continuar</span>
         <svg id="btn-check-spin" class="hidden spin" width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="white" stroke-width="4" opacity=".25"/><path fill="white" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/></svg>
       </button>
+
+      <!-- Explicit register button -->
+      <button class="btn-ghost" onclick="showScreen('screen-register', ''); document.getElementById('reg-doc').value = document.getElementById('inp-doc').value; document.getElementById('reg-nombre').value = ''; document.getElementById('reg-pwd').value = '';" style="border-color:#39A900;color:#39A900;margin-top:.75rem">
+        🆕 ¿Primera vez? Regístrate como aprendiz
+      </button>
+
       <button class="btn-ghost" onclick="showScreen('screen-late-form','')">
         ⏰ Llegué tarde / Solicitar validación
       </button>
@@ -349,12 +355,12 @@ app.get('/attendance/:token', (req, res) => {
           document.getElementById('feedback-student-login').className = 'hidden mb-4';
           showScreen('screen-student-login', '');
         } else {
-          // New student → Show registration screen
-          document.getElementById('reg-doc').value = doc;
-          document.getElementById('reg-nombre').value = '';
-          document.getElementById('reg-pwd').value = '';
-          document.getElementById('feedback-register').className = 'hidden mb-4';
-          showScreen('screen-register', '');
+          // Document not found in active class session database
+          showFeedback(
+            document.getElementById('feedback-check'), 
+            '⚠️ Documento no registrado en esta ficha. Verifícalo o regístrate con el botón de abajo si es tu primera vez.', 
+            'warning'
+          );
         }
       } else {
         if (['ROOM_EXPIRED','SESSION_CLOSED','SESSION_NOT_FOUND'].includes(result.error?.code)) {

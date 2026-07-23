@@ -242,14 +242,11 @@ export async function initDb() {
   // Migration: Add created_at column to late_requests if not exists
   try {
     if (isPostgres) {
-      const checkCol = await query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name='late_requests' and column_name='created_at'
-      `);
-      if (checkCol.length === 0) {
+      try {
         await run(`ALTER TABLE late_requests ADD COLUMN created_at TEXT`);
         console.log('Migration: Added created_at column to late_requests in Postgres');
+      } catch (err) {
+        if (err.code !== '42701') throw err; // Ignore 'column already exists'
       }
     } else {
       const columns = await query(`PRAGMA table_info(late_requests)`);
@@ -266,14 +263,11 @@ export async function initDb() {
   // Migration: Add ip_check_enabled column to attendance_sessions if not exists
   try {
     if (isPostgres) {
-      const checkCol = await query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name='attendance_sessions' and column_name='ip_check_enabled'
-      `);
-      if (checkCol.length === 0) {
+      try {
         await run(`ALTER TABLE attendance_sessions ADD COLUMN ip_check_enabled INTEGER DEFAULT 1`);
         console.log('Migration: Added ip_check_enabled column to attendance_sessions in Postgres');
+      } catch (err) {
+        if (err.code !== '42701') throw err; // Ignore 'column already exists'
       }
     } else {
       const columns = await query(`PRAGMA table_info(attendance_sessions)`);
