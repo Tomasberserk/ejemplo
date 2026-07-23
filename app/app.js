@@ -264,6 +264,21 @@ btnLogout.addEventListener('click', () => {
   showPortal();
 });
 
+function handleAuthError(res) {
+  if (res.status === 401) {
+    state.token = '';
+    state.person = null;
+    state.activeSession = null;
+    localStorage.removeItem('token');
+    localStorage.removeItem('person');
+    stopSessionPolling();
+    showPortal();
+    alert('Tu sesión ha expirado o el servidor fue reiniciado. Por favor, inicia sesión de nuevo.');
+    return true;
+  }
+  return false;
+}
+
 function showPortal() {
   document.getElementById('portalScreen').classList.remove('hidden');
   document.getElementById('scannerScreen').classList.add('hidden');
@@ -383,6 +398,8 @@ async function loadFichas() {
     const resInst = await fetch(`${state.apiUrl}/api/institutions`, {
       headers: { 'Authorization': `Bearer ${state.token}` }
     });
+    if (handleAuthError(resInst)) return;
+
     const instData = await resInst.json();
     if (!resInst.ok) throw new Error(instData.error.message);
 
@@ -393,6 +410,8 @@ async function loadFichas() {
     const resUnits = await fetch(`${state.apiUrl}/api/institutions/${sena.id}/units`, {
       headers: { 'Authorization': `Bearer ${state.token}` }
     });
+    if (handleAuthError(resUnits)) return;
+
     const unitsData = await resUnits.json();
     if (!resUnits.ok) throw new Error(unitsData.error.message);
 
@@ -413,6 +432,8 @@ async function checkForActiveSession() {
     const res = await fetch(`${state.apiUrl}/api/sessions`, {
       headers: { 'Authorization': `Bearer ${state.token}` }
     });
+    if (handleAuthError(res)) return;
+
     const result = await res.json();
     if (res.ok && result.data && result.data.length > 0) {
       // Find the most recent active or draft session
@@ -1128,6 +1149,8 @@ async function fetchInstructorExcuses() {
     const res = await fetch(`${state.apiUrl}/api/instructor/excuses`, {
       headers: { 'Authorization': `Bearer ${state.token}` }
     });
+    if (handleAuthError(res)) return;
+
     const result = await res.json();
     if (res.ok) {
       renderInstructorExcusesGrid(result.data);
@@ -1234,6 +1257,8 @@ async function fetchLateRequests() {
     const res = await fetch(`${state.apiUrl}/api/instructor/late-requests`, {
       headers: { 'Authorization': `Bearer ${state.token}` }
     });
+    if (handleAuthError(res)) return;
+
     const result = await res.json();
     if (res.ok) {
       renderLateRequests(result.data);
@@ -1400,6 +1425,8 @@ async function fetchCoordInstructors() {
     const res = await fetch(`${state.apiUrl}/api/coord/instructors`, {
       headers: { 'Authorization': `Bearer ${state.token}` }
     });
+    if (handleAuthError(res)) return;
+
     const result = await res.json();
     if (res.ok) {
       renderCoordInstructors(result.data);
@@ -1529,6 +1556,8 @@ async function fetchCoordFichas() {
     const res = await fetch(`${state.apiUrl}/api/coord/fichas`, {
       headers: { 'Authorization': `Bearer ${state.token}` }
     });
+    if (handleAuthError(res)) return;
+
     const result = await res.json();
     if (res.ok) {
       renderCoordFichas(result.data);
