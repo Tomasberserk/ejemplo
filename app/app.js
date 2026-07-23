@@ -993,7 +993,7 @@ async function fetchReportData() {
 function renderReportGrid(data) {
   reportGridBody.innerHTML = '';
   if (data.length === 0) {
-    reportGridBody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-500">Ningún dato disponible.</td></tr>';
+    reportGridBody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-500">Ningún dato disponible.</td></tr>';
     return;
   }
 
@@ -1008,7 +1008,6 @@ function renderReportGrid(data) {
         <td class="py-3.5 px-4 text-slate-400 font-mono">${r.documento}</td>
         <td class="py-3.5 px-4 text-center font-mono">${r.horas_programadas}h</td>
         <td class="py-3.5 px-4 text-center font-mono text-green-400">${r.horas_asistidas}h</td>
-        <td class="py-3.5 px-4 text-center font-mono text-red-400">${r.horas_falla}h</td>
         <td class="py-3.5 px-4 text-center">
           <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-bold font-mono ${pctBadge}">${r.porcentaje_asistencia}%</span>
         </td>
@@ -1033,7 +1032,6 @@ btnPrintReport.addEventListener('click', () => {
       'Documento': r.documento,
       'Horas Programadas': r.horas_programadas,
       'Horas Asistidas': r.horas_asistidas,
-      'Horas Falla': r.horas_falla,
       '% Asistencia': r.porcentaje_asistencia + '%',
       'Tipo de Registro': r.tipo_registro,
       'Hora Ingreso': r.hora_ingreso,
@@ -1116,7 +1114,6 @@ btnDownloadPdfReport.addEventListener('click', () => {
       r.documento,
       `${r.horas_programadas}h`,
       `${r.horas_asistidas}h`,
-      `${r.horas_falla}h`,
       `${r.porcentaje_asistencia}%`,
       r.tipo_registro,
       r.hora_ingreso && r.hora_ingreso !== '-' ? `${r.hora_ingreso} / ${r.hora_salida || '-'}` : 'FALLA_TOTAL'
@@ -1125,7 +1122,7 @@ btnDownloadPdfReport.addEventListener('click', () => {
     // Draw AutoTable
     doc.autoTable({
       startY: 72,
-      head: [['#', 'Aprendiz', 'Documento', 'Prog.', 'Asist.', 'Fallas', '% Jornada', 'Estado', 'Entrada / Salida']],
+      head: [['#', 'Aprendiz', 'Documento', 'Prog.', 'Asist.', '% Jornada', 'Estado', 'Entrada / Salida']],
       body: tableRows,
       theme: 'grid',
       headStyles: {
@@ -1142,8 +1139,7 @@ btnDownloadPdfReport.addEventListener('click', () => {
         0: { width: 8 },
         3: { halign: 'center' },
         4: { halign: 'center' },
-        5: { halign: 'center' },
-        6: { halign: 'center' }
+        5: { halign: 'center' }
       },
       margin: { left: 14, right: 14 }
     });
@@ -1297,7 +1293,6 @@ function renderStudentHistoryGrid(history) {
         <td class="py-3 px-4 font-mono text-xs">${h.hora_ingreso}</td>
         <td class="py-3 px-4 font-mono text-xs">${h.hora_salida}</td>
         <td class="py-3 px-4 text-center font-mono text-green-400">${h.horas_asistidas}h</td>
-        <td class="py-3 px-4 text-center font-mono text-red-400">${h.horas_falla}h</td>
         <td class="py-3 px-4">
           <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${badgeClass}">${h.tipo_registro}</span>
         </td>
@@ -2001,7 +1996,6 @@ window.downloadCoordExcelReport = async (sessionId, fichaCode) => {
       'Documento': r.documento,
       'Horas Programadas': r.horas_programadas,
       'Horas Asistidas': r.horas_asistidas,
-      'Horas Falla': r.horas_falla,
       '% Asistencia': r.porcentaje_asistencia + '%',
       'Tipo de Registro': r.tipo_registro,
       'Hora Ingreso': r.hora_ingreso,
