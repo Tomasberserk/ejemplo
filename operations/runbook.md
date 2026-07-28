@@ -1,96 +1,68 @@
 # Runbook de Operaciones — app-attendance
 
-## Levantar el stack completo
+Este runbook detalla las instrucciones operativas para instalar, ejecutar y solucionar problemas en el stack monolítico real de la aplicación (Node.js/Express + SQLite/PostgreSQL).
 
+---
+
+## 1. Puesta en Marcha en Entorno Local
+
+El sistema está empaquetado para correr de manera directa sin requerir contenedores de Docker o bases de datos externas pre-instaladas.
+
+### Paso 1: Instalación de Dependencias
+Ejecutar el comando de instalación recursiva desde la raíz del proyecto para descargar las librerías del backend:
 ```powershell
-# Primer inicio o rebuild completo
-docker compose down -v   # solo si quieres recrear volúmenes
-docker compose up -d --build
-
-# Verificar estado
-docker compose ps
-docker compose logs -f api
+npm run install:all
 ```
 
-El servicio `db-seed` se ejecuta una sola vez y termina. Es idempotente: volver a correrlo no duplica datos.
+### Paso 2: Configuración de Variables de Entorno
+1. Crear un archivo de variables de entorno (opcional) en la carpeta `back/`.
+2. Parámetros soportados:
+   - `PORT`: Define el puerto del servidor monolítico (por defecto `4000`).
+   - `JWT_SECRET`: Llave secreta para firmar tokens (por defecto `'super-secret-key-for-dev-only'`).
+   - `DATABASE_URL`: Cadena de conexión a PostgreSQL (opcional; si se omite, se usa SQLite local).
 
-## Apagado
-
+### Paso 3: Iniciar la Aplicación en Desarrollo
+Ejecutar el script de inicio en desarrollo desde la raíz del proyecto:
 ```powershell
-docker compose down        # conserva volúmenes (datos preservados)
-docker compose down -v     # destruye volúmenes (datos perdidos)
+npm run dev
 ```
+Esto iniciará el servidor Express en `http://localhost:4000`, inicializará automáticamente el archivo de base de datos local `back/database.sqlite`, creará las tablas y sembrará los datos iniciales.
 
-## Ver logs
+---
 
-```powershell
-docker compose logs -f api       # backend
-docker compose logs -f mongo     # base de datos
-docker compose logs db-seed      # resultado del seed
-```
+## 2. Direcciones de Acceso Local
 
-## Variables de entorno
-
-1. Copiar `.env.example` → `.env`
-2. Cambiar `JWT_SECRET` por un valor fuerte en producción.
-3. `docker compose` lee `.env` automáticamente.
-
-## Accesos locales
-
-| Servicio | URL |
+| Componente | URL de Acceso |
 |---|---|
-| Frontend | http://localhost:8080 |
-| Backend API | http://localhost:4000 |
-| Health check | http://localhost:4000/health |
-| MongoDB | mongodb://localhost:27017 |
+| **Panel Docente/Coordinador** | http://localhost:4000 |
+| **Página de Asistencia Estudiante** | http://localhost:4000/attendance/manual |
+| **Chequeo de Proceso (Health)** | http://localhost:4000/health |
+| **Chequeo de Base de Datos (Ready)** | http://localhost:4000/ready |
 
-## Desarrollo backend sin Docker
+---
 
+## 3. Ejecución de Pruebas de Integración
+
+Con el servidor Express corriendo en el puerto 4000, abre una nueva terminal y ejecuta la suite de pruebas de integración para validar el correcto funcionamiento de los endpoints:
 ```powershell
-cd back
-npm install
-# Necesita .env con MONGO_URI apuntando a mongo local o Docker
-npm run dev        # ts-node-dev con reload
-npm run typecheck  # verifica tipos sin compilar
-npm test           # vitest unit tests
+node back/test-integration.js
 ```
 
-## Desarrollo frontend sin Docker
+---
 
-```powershell
-cd app
-npm install
-npm run dev        # Vite dev server en puerto 5173
-```
+## 4. Credenciales de Prueba por Defecto
 
-Configurar la URL del backend en la app: pantalla "Backend" → ingresar `http://localhost:4000`.
+* **Instructor SENA:** documento `1079606375` (Contraseña: `1079606375`).
+* **Coordinador SENA:** documento `9999999999` (Contraseña: `coord.2026`).
+* **Aprendiz SENA:** documento `1077228780` (Contraseña: `1077228780`).
 
-## Credenciales de prueba (seed de datos reales)
+---
 
-- **Instructor SENA**: documento `1079606375`, password `1079606375`
-- **Docente CORHUILA**: documento `1079606375`, password `1079606375` (misma persona, institución diferente)
+## 5. Solución de Problemas Comunes
 
-> Los estudiantes/aprendices no pueden autenticarse en la app de instructores (FORMADOR_ROLES limita el acceso).
-
-## Rebuild de imagen tras cambios en package.json
-
-```powershell
-docker compose build api
-docker compose up -d api
-```
-
-## Re-ejecutar seed manualmente
-
-```powershell
-docker compose run --rm db-seed
-```
-
-## Solución de problemas comunes
-
-| Síntoma | Causa probable | Acción |
+| Síntoma | Causa probable | Acción correctiva |
 |---|---|---|
-| `Error: JWT_SECRET is required` | Falta `.env` | Crear `.env` desde `.env.example` |
-| Login devuelve 401 con credenciales correctas | `npm install` no ejecutado en `back/` | `docker compose build api` |
-| QR no aparece al activar sesión | Servicio api inaccesible desde la app | Verificar URL en config de la app |
-| `MongoServerError: Authentication failed` | Credenciales de Mongo incorrectas | Verificar `MONGO_URI` en `.env` |
-| Seed no carga datos | Archivo fuente no presente en `db/source/` | Verificar que el JSON esté en la ruta correcta |
+| **Error: `SQLite database locked`** | Múltiples procesos intentan escribir en SQLite simultáneamente. | Cierra procesos Node.js huérfanos que hayan quedado corriendo en segundo plano (`killtask` / `killall`). |
+| **Dot de API en rojo en la App** | La SPA no puede conectar con la API. | Verifica que el campo URL superior en la SPA apunte exactamente a `http://localhost:4000` (o a tu URL de ngrok pública). |
+| **El QR no se genera** | Error al cargar la librería `qrcodejs` por CDN. | Asegúrate de que la máquina tiene conexión a internet activa para descargar los scripts del CDN en el arranque del cliente. |
+| **Fallo en IP Check de Estudiantes** | Los estudiantes entran desde red de datos 4G/5G y el instructor en Wi-Fi. | Edita la sala en el panel del instructor y desmarca la casilla "Validación de IP" antes de crear la sala. |

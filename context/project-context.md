@@ -2,132 +2,94 @@
 
 ## Objetivo
 
-Aplicacion movil para toma de asistencia academica con QR temporal y codigo de sala anti-fraude (CSR), usando Ionic React + Capacitor, API backend dockerizada y MongoDB local en Docker.
+Aplicación web móvil para la toma de asistencia académica con código QR temporal y código de sala anti-fraude (CSR), usando una arquitectura monolítica ligera con Node.js/Express en el backend, un frontend de página única (SPA) en Vanilla Javascript con Tailwind CSS (vía CDN), y base de datos conmutable SQLite (local) y PostgreSQL (producción).
 
-## Stack Tecnico
+## Stack Técnico Real
 
-| Capa | Tecnologia |
+| Capa | Tecnología |
 |------|-----------|
-| Frontend | Ionic React 8 + Vite + Capacitor 7 |
-| Backend | Node.js 20 + TypeScript + Express 5 + Zod 4 |
-| Base de datos | MongoDB 7 via Docker + Mongoose 9 |
-| Auth | JWT 24h (jsonwebtoken 9) + bcryptjs 2 |
-| Contenedores | Docker Compose (mongo, api, app, db-seed) |
-| Reportes | xlsx 0.18.5 (multi-sesion Excel) |
+| Frontend | HTML5 + CSS3 + Javascript Vanilla + Tailwind CSS (CDN) + html5-qrcode |
+| Backend | Node.js (Express) |
+| Base de datos | SQLite (Local) / PostgreSQL (Nube) |
+| Autenticación | JWT 24h (jsonwebtoken) + bcryptjs |
+| Reportes | xlsx (SheetJS) + jsPDF |
 
 ## Instituciones
 
 ### SENA
 - Rol formador: Instructor
-- Unidad academica: Ficha
+- Unidad académica: Ficha
 - Persona inscrita: Aprendiz (rol: APRENDIZ)
-- Colores: parametrizados. Pendiente confirmar valores oficiales.
+- Colores: Parametrizados en la base de datos (Verde SENA: `#39A900`).
 
 ### CORHUILA / Universidad
 - Rol formador: Docente
-- Unidad academica: Materia
+- Unidad académica: Materia
 - Persona inscrita: Estudiante (rol: ESTUDIANTE)
-- Colores: parametrizados. Pendiente confirmar valores oficiales.
+- Colores: Parametrizados en la base de datos.
 
 ## Roles disponibles
 
-`ADMIN` · `INSTRUCTOR` · `DOCENTE` · `APRENDIZ` · `ESTUDIANTE`
+`ADMIN` · `INSTRUCTOR` · `DOCENTE` · `APRENDIZ` · `ESTUDIANTE` · `COORDINADOR`
 
-Una persona puede tener multiples roles (array). Los permisos se calculan por union de roles.
-El sistema soporta que la misma persona sea INSTRUCTOR en una institucion y DOCENTE en otra.
+Una persona puede tener múltiples roles (JSON Array). Los permisos se calculan por la unión de roles.
+El sistema soporta que la misma persona sea INSTRUCTOR en una institución y DOCENTE en otra.
 
-## Flujo de autenticacion
+## Flujo de autenticación
 
-1. `POST /api/auth/login` con `{ documento, password }`
-2. Backend busca persona activa por documento (cualquier rol)
-3. Si el password empieza con `$2` → bcrypt.compare(); si no → comparacion directa (dev)
-4. Respuesta: `{ token (JWT 24h), person { id, institutionId, documento, nombre, roles } }`
-5. Frontend guarda token en `@capacitor/preferences` (no localStorage)
-6. Todas las rutas `/api/*` (excepto `/api/auth/*` y publicas) requieren `Authorization: Bearer <token>`
-7. Autorización por recurso/accion via coleccion `permissions` en MongoDB
+1. `POST /api/auth/login` con `{ documento, password }`.
+2. Backend busca a la persona activa por documento en la base de datos.
+3. Si el password empieza con `$2b$` o `$2a$` → `bcrypt.compare()`; si no → comparación directa en texto plano (entorno de desarrollo/seeds).
+4. Respuesta: `{ token (JWT 24h), person { id, institutionId, documento, nombre, roles } }`.
+5. Frontend guarda el token en `localStorage`.
+6. Todas las rutas `/api/*` (excepto `/api/auth/*` y endpoints de asistencia pública) requieren cabecera `Authorization: Bearer <token>`.
 
-## Sistema anti-fraude CSR (Codigo de Sala Rotativo)
+## Sistema anti-fraude CSR (Código de Sala Rotativo)
 
-- El instructor activa la sesion → genera QR + codigo de sala de 6 caracteres
-- El codigo rota automaticamente cada 90 segundos (configurable: `ROOM_CODE_TTL_SECONDS`)
-- Charset: `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (visualmente no ambiguos)
-- El aprendiz/estudiante autenticado ingresa el codigo en su app → registro con doble prueba (JWT + codigo)
-- `GET /api/sessions/:id/room-code` → instructor ve el codigo con cuenta regresiva
-- `POST /api/attendance/checkin` → aprendiz registra asistencia con el codigo
+- El instructor activa la sesión → genera QR + código de sala de 6 caracteres.
+- El código rotativo del QR cambia dinámicamente cada 15 segundos en base al ID de la sesión y el timestamp del servidor (`generateQrToken` en `controllers.js`).
+- Si la lectura del QR falla, el aprendiz puede ingresar manualmente el código de 6 caracteres que expira y rota en el servidor.
+- `POST /attendance/checkin` / `POST /public/attendance/:token/register` → el aprendiz registra asistencia con el código y se valida su IP/subred.
 
 ## Usuarios seed de desarrollo
 
 | Nombre | Documento | Password | Rol SENA | Rol CORHUILA |
 |--------|-----------|----------|----------|--------------|
-| Instructor SENA | 1079606375 | 1079606375 | INSTRUCTOR | — |
-| Docente CORHUILA | 1079606375 | 1079606375 | — | DOCENTE |
-| Jesús González | 0000000001 | qwerty.2026 | INSTRUCTOR | DOCENTE |
-| Aprendices/Estudiantes | (del seed fuente) | (documento) | APRENDIZ o ESTUDIANTE | — |
+| Instructor SENA | 1079606375 | 1079606375 (plano) | INSTRUCTOR | — |
+| Docente CORHUILA | 1079606375 | 1079606375 (plano) | — | DOCENTE |
+| Jesús González | 0000000001 | qwerty.2026 (bcrypt) | INSTRUCTOR | DOCENTE |
+| Coordinador SENA | 9999999999 | coord.2026 (bcrypt) | — | COORDINADOR |
+| Aprendiz Tomas | 1077228780 | 1077228780 (plano) | APRENDIZ | — |
 
 **Notas:**
-- Jesús González tiene password almacenada con bcrypt (cost=10). Los demas con texto plano (solo dev).
-- Jesús González demuestra soporte de doble rol: INSTRUCTOR en SENA y DOCENTE en CORHUILA.
-- Antes de produccion ejecutar el script de migracion de passwords.
+- El instructor SENA y el aprendiz se inicializan con password en texto plano para desarrollo.
+- El Coordinador y Jesús González tienen contraseñas encriptadas con bcrypt.
 
 ## Variables de entorno
 
-| Variable | Default | Descripcion |
+| Variable | Default | Descripción |
 |----------|---------|-------------|
-| `MONGO_URI` | `mongodb://attendance:attendance_dev_password@mongo:27017/app_attendance?authSource=admin` | URI de conexion |
-| `JWT_SECRET` | `super-secret-key-for-dev-only` | **Cambiar en produccion** |
-| `QR_DEFAULT_TTL_MINUTES` | `10` | TTL del QR de sesion |
-| `ROOM_CODE_TTL_SECONDS` | `90` | TTL del codigo de sala rotativo (30-300) |
-| `API_CORS_ORIGIN` | `*` | Origen CORS permitido |
-| `PORT` | `4000` | Puerto del backend |
-| `APP_PORT` | `8080` | Puerto del frontend |
+| `DATABASE_URL` | *ninguno* | Si está presente, el sistema inicia en modo PostgreSQL. Si no, usa SQLite local. |
+| `JWT_SECRET` | `super-secret-key-for-dev-only` | Clave secreta para firmar tokens JWT. |
+| `PORT` | `4000` | Puerto en el que corre el servidor Express (API y estáticos). |
 
-## Comandos
+## Comandos de Ejecución
+
+El proyecto está diseñado bajo un modelo monolítico simplificado.
 
 ```bash
-# Levantar todo desde cero
-docker compose up -d --build
+# Instalar dependencias en el backend
+npm run install:all
 
-# Solo rebuild backend
-docker compose up -d --build api
+# Iniciar servidor backend y frontend estático en desarrollo
+npm run dev
 
-# Solo rebuild frontend
-docker compose up -d --build app
-
-# Typecheck backend
-cd back && npx tsc --noEmit
-
-# Build frontend
-cd app && npm run build
-
-# Tests backend
-cd back && npm test
-
-# Ver logs del backend
-docker compose logs -f api
+# Arrancar el servidor en producción
+npm start
 ```
-
-## Flujo operativo en clase
-
-1. PC con Docker activo
-2. `docker compose up -d` (primera vez: `--build`)
-3. Tunel publico exponiendo el backend (ej. ngrok, localhost.run)
-4. App instalada en celular → configurar URL del backend
-5. Instructor inicia sesion y activa QR + codigo de sala
-6. Estudiantes/aprendices inician sesion → ingresan codigo de sala
 
 ## Restricciones
 
-- Sin SQLite local en app.
-- Sin MongoDB Atlas.
-- Sin backend embebido.
-- La app no contiene credenciales de base de datos.
-- La URL del backend no esta quemada en la app (se configura en runtime).
-
-## Pendientes tecnicos
-
-- [ ] Confirmar colores oficiales de SENA y CORHUILA.
-- [ ] Script de migracion de passwords a bcrypt para produccion.
-- [ ] Configurar `JWT_SECRET` seguro en entorno de produccion.
-- [ ] Definir estrategia de despliegue AWS (ECS/EC2 + Atlas o DocumentDB).
-- [ ] Limitar `API_CORS_ORIGIN` al dominio de produccion.
-
+- Sin Docker Compose ni MongoDB Atlas.
+- La URL del backend es configurable en runtime en la app del instructor para permitir el uso de túneles locales (ej. ngrok).
+- El token QR es opaco e independiente, y se calcula en tiempo de ejecución.

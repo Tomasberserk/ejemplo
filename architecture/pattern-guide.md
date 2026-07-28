@@ -1,73 +1,68 @@
-# Pattern Guide — app-attendance
+# Guía de Patrones de Código — app-attendance
 
-Patrones de código vigentes. Todo cambio debe respetar estas convenciones.
+Este documento describe las convenciones y patrones de código vigentes en el proyecto para asegurar consistencia y mantenibilidad en la base de código actual.
 
-## Backend (`back/`)
+---
 
-### Controladores
+## 1. Patrones del Backend (`back/`)
 
-- Cada handler se exporta como función nombrada.
-- Se envuelve con `asyncHandler` en la capa de rutas (nunca en el controlador).
-- Errores de negocio: `throw new AppError(message, code, httpStatus)`.
-- Validación de input con Zod en `validators/` antes de llegar al controlador.
-- Validación de tipos de request: `const { field } = req.body as { field?: unknown }`, luego narrowing explícito.
+El backend está estructurado con Javascript ES Modules, exponiendo controladores directos que interactúan con un adaptador de base de datos relacional.
 
-```ts
-// Correcto
-export const postSession = asyncHandler(async (req, res) => {
-  const body = SessionCreateSchema.parse(req.body);
-  const session = await AttendanceService.createSession(body);
-  res.status(201).json({ data: serializeSession(session.toObject()) });
-});
+### A. Controladores y Rutas
+- Todos los controladores se definen como funciones asíncronas en `back/src/controllers.js` y se exportan de manera nombrada.
+- Las rutas se registran en `back/src/server.js` asociando los controladores y aplicando los middlewares necesarios de manera directa.
+- Se implementan bloques `try-catch` explícitos en los controladores para el manejo de excepciones y errores inesperados, retornando respuestas estructuradas:
+  - Éxito: `{ data: ... }`
+  - Error: `{ error: { code: 'CODIGO_ERROR', message: 'Mensaje descriptivo' } }`
+
+```javascript
+// Ejemplo de controlador
+export const getSomething = async (req, res) => {
+  try {
+    const rows = await query('SELECT * FROM table');
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
 ```
 
-### Servicios
+### B. Acceso a Base de Datos
+- No se inyectan ORMs. Se utiliza la API simplificada definida en `back/src/db.js` que exporta tres helpers principales asíncronos:
+  - `query(sql, params)`: Ejecuta una consulta SQL de tipo `SELECT` y retorna un array de filas.
+  - `get(sql, params)`: Ejecuta una consulta y retorna únicamente la primera fila encontrada o `null`.
+  - `run(sql, params)`: Ejecuta comandos de escritura (`INSERT`, `UPDATE`, `DELETE`) y retorna `{ id, changes }`.
+- Para asegurar la portabilidad entre SQLite (que usa placeholders `?`) y PostgreSQL (que usa `$1, $2`), las consultas SQL en los controladores deben escribirse con placeholders `?`. El adaptador `db.js` se encarga de convertirlos dinámicamente si se está utilizando Postgres.
 
-- Lógica de negocio pura en `services/`.
-- No acceden a `req`/`res` — solo reciben datos planos.
-- Lanzan `AppError` con código semántico cuando una regla de negocio falla.
+### C. Autenticación y Seguridad
+- Rutas públicas y protegidas separadas en `server.js`.
+- Las rutas bajo `/api/*` requieren pasar por el middleware `authenticate`, el cual descodifica el JWT e inyecta la información del usuario en `req.user`.
+- Las operaciones reservadas a la coordinación utilizan además el middleware `requireRole('COORDINADOR')`.
 
-### Serialización
+---
 
-- Nunca retornar documentos Mongoose crudos a la capa HTTP.
-- Usar `serializePerson`, `serializeSession`, etc. de `services/serializers.ts`.
-- `password` NUNCA aparece en respuestas API (excluido explícitamente en `serializePerson`).
+## 2. Patrones del Frontend (`app/`)
 
-### Autenticación
+El frontend está estructurado como una aplicación monolítica ligera de una sola página (SPA) controlada directamente por manipulación del DOM.
 
-- `authenticate` middleware verifica el JWT (Bearer token).
-- Se aplica a nivel de router en `app.ts`: `app.use('/api', authenticate, router)`.
-- Rutas públicas montadas ANTES de la capa autenticada.
-- El payload JWT contiene: `{ id, institutionId, documento, nombre, roles }`.
+### A. Control de Navegación y Pantallas
+- No existe un enrutador en el frontend. La navegación se realiza mediante la inyección y remoción condicional de la clase CSS `hidden` en los contenedores `<section>` de cada pantalla.
+- La función centralizada `showDashboard()` evalúa el rol del usuario autenticado en `state.person.roles` y enruta visualmente a `coordDashboardScreen`, `dashboardScreen` (instructor) o `studentDashboardScreen`.
 
-### Variables de entorno
+### B. Gestión de Estado Global
+- Todo el estado dinámico del cliente se consolida en un único objeto global mutable llamado `state` definido al inicio de `app.js`:
+  ```javascript
+  let state = {
+    apiUrl: window.location.origin,
+    token: localStorage.getItem('token') || '',
+    person: JSON.parse(localStorage.getItem('person') || 'null'),
+    activeSession: null,
+    // ...
+  };
+  ```
+- El token y la información del usuario se sincronizan con el almacenamiento persistente mediante `localStorage`.
 
-- Centralizadas en `config/env.ts` usando Zod schema.
-- Nunca `process.env.X` directamente — siempre `env.X`.
-
-## Frontend (`app/`)
-
-### Estado de autenticación
-
-- Único origen de verdad: `AuthContext` (importar `useAuth()`).
-- No duplicar estado de auth en componentes individuales.
-- `AuthProvider` envuelve toda la app en `App.tsx`.
-
-### Comunicación con API
-
-- Toda llamada HTTP a través de `ApiClient` (`services/api.ts`).
-- `request()` es privado — agregar métodos públicos con nombre semántico por endpoint.
-- El token JWT se adjunta automáticamente en el método `request()` desde `Preferences`.
-- `loginRequest()` usa `skipAuth: true` (no puede haber token antes del login).
-
-### Navegación
-
-- No hay router (no hay `useIonRouter`, no hay `IonRouterOutlet`).
-- La navegación es mediante `view` state en `AppContent` (conditional rendering).
-- `ViewKey` define todas las vistas posibles — agregar la nueva vista antes de usarla.
-
-### Tipos
-
-- Definidos en `types/domain.ts`.
-- `PersonRole` para los roles del sistema.
-- No crear tipos duplicados en componentes — reutilizar los de `domain.ts`.
+### C. Consumo de API y Renderizado
+- Se realizan peticiones directas al servidor utilizando la API nativa `fetch()`.
+- En caso de recibir un estado de respuesta `401 Unauthorized`, se gatilla de inmediato la función `handleAuthError(res)` que limpia las credenciales en `localStorage`, detiene el polling de actualización y redirige al portal de login.
+- El renderizado de listas y tablas se realiza concatenando plantillas literales de HTML e inyectándolas en el DOM mediante el atributo `innerHTML` de los contenedores destino.

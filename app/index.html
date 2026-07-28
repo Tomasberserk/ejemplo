@@ -244,6 +244,9 @@
           <button id="btnTabLateRequests" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all">
             Solicitudes Tard&iacute;as
           </button>
+          <button id="btnTabBiometrics" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all">
+            Verificaci&oacute;n Facial
+          </button>
         </div>
       </div>
 
@@ -519,6 +522,41 @@
               <tbody id="lateRequestsGridBody" class="divide-y divide-slate-800/40 text-slate-300">
                 <tr>
                   <td colspan="7" class="text-center py-8 text-slate-500">No hay solicitudes tard&iacute;as pendientes.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 5: VERIFICACIÓN FACIAL BIOMÉTRICA (INSTRUCTOR) -->
+        <div id="tabContentBiometrics" class="w-full hidden glass rounded-3xl p-6 flex flex-col gap-6">
+          <div class="border-b border-slate-800/60 pb-4">
+            <h3 class="text-lg font-bold text-white">Verificación Facial Manual (Excepciones)</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Revise las fotos de los estudiantes cuya validación automática de IA falló. Compare la foto original de registro con la selfie tomada en el aula.</p>
+          </div>
+
+          <!-- Loading state -->
+          <div id="biometricsLoading" class="hidden flex items-center justify-center py-10 gap-3 text-slate-400 text-sm">
+            <svg class="w-5 h-5 animate-spin text-[#39A900]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18.2"></path></svg>
+            <span>Cargando excepciones biométricas...</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-slate-800 text-slate-400 text-xs font-semibold">
+                  <th class="py-3 px-4">Estudiante</th>
+                  <th class="py-3 px-4">Documento</th>
+                  <th class="py-3 px-4">Foto Registro (Original)</th>
+                  <th class="py-3 px-4">Foto Capturada (Aula)</th>
+                  <th class="py-3 px-4">Similitud IA</th>
+                  <th class="py-3 px-4">Fecha/Hora</th>
+                  <th class="py-3 px-4 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="biometricsGridBody" class="divide-y divide-slate-800/40 text-slate-300">
+                <tr>
+                  <td colspan="7" class="text-center py-8 text-slate-500">No hay excepciones biométricas pendientes.</td>
                 </tr>
               </tbody>
             </table>

@@ -68,6 +68,76 @@ export const login = async (req, res) => {
   }
 };
 
+// Student Login (Habeas Data & Biometrics flow)
+export const studentLogin = async (req, res) => {
+  try {
+    const { documento, password } = req.body;
+    if (!documento || !password) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'Documento y contraseña son requeridos.' }
+      });
+    }
+
+    const person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [documento]);
+    if (!person) {
+      return res.status(401).json({
+        error: { code: 'INVALID_CREDENTIALS', message: 'Credenciales inválidas o usuario inactivo.' }
+      });
+    }
+
+    // Verify student role
+    const roles = JSON.parse(person.roles);
+    if (!roles.includes('APRENDIZ')) {
+      return res.status(403).json({
+        error: { code: 'FORBIDDEN', message: 'Acceso exclusivo para aprendices.' }
+      });
+    }
+
+    // Check password
+    let isMatch = false;
+    if (person.password.startsWith('$2b$') || person.password.startsWith('$2a$')) {
+      isMatch = await bcrypt.compare(password, person.password);
+    } else {
+      isMatch = (password === person.password);
+    }
+
+    if (!isMatch) {
+      return res.status(401).json({
+        error: { code: 'INVALID_CREDENTIALS', message: 'Contraseña incorrecta.' }
+      });
+    }
+
+    // Generate JWT
+    const tokenPayload = {
+      id: person.id,
+      institutionId: person.institution_id,
+      documento: person.documento,
+      nombre: person.nombre,
+      roles
+    };
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
+
+    return res.status(200).json({
+      data: {
+        token,
+        person: {
+          id: person.id,
+          nombre: person.nombre,
+          documento: person.documento,
+          photo_reference: person.photo_reference || '',
+          terms_accepted: person.terms_accepted || 0
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Student login error:', err);
+    return res.status(500).json({
+      error: { code: 'SERVER_ERROR', message: 'Error interno en el inicio de sesión.' }
+    });
+  }
+};
+
+
 export const authenticate = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

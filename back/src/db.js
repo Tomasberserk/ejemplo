@@ -143,6 +143,8 @@ export async function initDb() {
       active INTEGER,
       password TEXT,
       roles TEXT,
+      photo_reference TEXT,
+      terms_accepted INTEGER DEFAULT 0,
       FOREIGN KEY(institution_id) REFERENCES institutions(id),
       UNIQUE(institution_id, documento)
     )
@@ -178,6 +180,9 @@ export async function initDb() {
       is_reopened INTEGER,
       creator_ip TEXT,
       ip_check_enabled INTEGER DEFAULT 1,
+      evidence_submitted INTEGER DEFAULT 0,
+      evidence_submitted_at TEXT,
+      created_by TEXT,
       FOREIGN KEY(institution_id) REFERENCES institutions(id),
       FOREIGN KEY(unit_id) REFERENCES academic_units(id)
     )
@@ -202,6 +207,9 @@ export async function initDb() {
       tipo_registro TEXT,
       created_at TEXT,
       client_ip TEXT,
+      photo_evidence TEXT,
+      biometric_match_score REAL,
+      verification_method TEXT,
       FOREIGN KEY(session_id) REFERENCES attendance_sessions(id),
       FOREIGN KEY(institution_id) REFERENCES institutions(id),
       FOREIGN KEY(unit_id) REFERENCES academic_units(id),
@@ -306,6 +314,68 @@ export async function initDb() {
     }
   } catch (migErr) {
     console.error('Migration error (non-fatal) attendance_sessions.evidence:', migErr.message);
+  }
+
+  // Migration Phase v3: Add columns for Biometrics, terms and Session creators
+  try {
+    if (isPostgres) {
+      // 1. Add photo_reference to people
+      try {
+        await run(`ALTER TABLE people ADD COLUMN photo_reference TEXT`);
+      } catch (e) { if (e.code !== '42701') throw e; }
+
+      // terms_accepted
+      try {
+        await run(`ALTER TABLE people ADD COLUMN terms_accepted INTEGER DEFAULT 0`);
+      } catch (e) { if (e.code !== '42701') throw e; }
+
+      // 2. Add photo_evidence, biometric_match_score, verification_method to attendance_records
+      try {
+        await run(`ALTER TABLE attendance_records ADD COLUMN photo_evidence TEXT`);
+      } catch (e) { if (e.code !== '42701') throw e; }
+      try {
+        await run(`ALTER TABLE attendance_records ADD COLUMN biometric_match_score REAL`);
+      } catch (e) { if (e.code !== '42701') throw e; }
+      try {
+        await run(`ALTER TABLE attendance_records ADD COLUMN verification_method TEXT`);
+      } catch (e) { if (e.code !== '42701') throw e; }
+
+      // 3. Add created_by to attendance_sessions
+      try {
+        await run(`ALTER TABLE attendance_sessions ADD COLUMN created_by TEXT`);
+      } catch (e) { if (e.code !== '42701') throw e; }
+
+      console.log('Migration Phase v3: Columns verified in Postgres');
+    } else {
+      // SQLite
+      const peopleCols = await query(`PRAGMA table_info(people)`);
+      if (!peopleCols.some(col => col.name === 'photo_reference')) {
+        await run(`ALTER TABLE people ADD COLUMN photo_reference TEXT`);
+      }
+      if (!peopleCols.some(col => col.name === 'terms_accepted')) {
+        await run(`ALTER TABLE people ADD COLUMN terms_accepted INTEGER DEFAULT 0`);
+      }
+
+      const recCols = await query(`PRAGMA table_info(attendance_records)`);
+      if (!recCols.some(col => col.name === 'photo_evidence')) {
+        await run(`ALTER TABLE attendance_records ADD COLUMN photo_evidence TEXT`);
+      }
+      if (!recCols.some(col => col.name === 'biometric_match_score')) {
+        await run(`ALTER TABLE attendance_records ADD COLUMN biometric_match_score REAL`);
+      }
+      if (!recCols.some(col => col.name === 'verification_method')) {
+        await run(`ALTER TABLE attendance_records ADD COLUMN verification_method TEXT`);
+      }
+
+      const sessCols = await query(`PRAGMA table_info(attendance_sessions)`);
+      if (!sessCols.some(col => col.name === 'created_by')) {
+        await run(`ALTER TABLE attendance_sessions ADD COLUMN created_by TEXT`);
+      }
+
+      console.log('Migration Phase v3: Columns verified in SQLite');
+    }
+  } catch (migv3Err) {
+    console.error('Migration error (non-fatal) Phase v3:', migv3Err.message);
   }
 
   // Seed data if institutions is empty

@@ -1,6 +1,9 @@
 import { run, get, query } from './db.js';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-for-dev-only';
 
 // Helper to get client IP
 const getClientIp = (req) => {
@@ -495,8 +498,10 @@ export const checkin = async (req, res) => {
         return res.status(400).json({ error: { code: 'DUPLICATE_ENTRY', message: 'Ya registraste tu ingreso a esta clase.' } });
       }
 
+      const { photo_evidence = '', verification_method = 'biometric', biometric_match_score = null } = req.body;
+
       // Calculate blocks of attendance using pure helper
-      const { horasAsistidas, horasFalla, tipoRegistro, status } = calculateAttendanceBlocks(
+      const { horasAsistidas, horasFalla, tipoRegistro, status: calculatedStatus } = calculateAttendanceBlocks(
         session.activated_at,
         now.toISOString(),
         6
@@ -505,18 +510,23 @@ export const checkin = async (req, res) => {
 
       const recId = `ast_${Date.now().toString().substring(5)}`;
       const horaIngreso = now.toTimeString().split(' ')[0];
-      const fecha = now.toISOString().split('T')[0];
+      
+      // Determine actual record status: if biometrics failed and student forced manual checkin, status is 'pending_biometric'
+      const finalStatus = (verification_method === 'manual') ? 'pending_biometric' : calculatedStatus;
+      const msg = (verification_method === 'manual') 
+        ? 'Validación biométrica no superada. Pendiente de aprobación visual del docente.'
+        : (horasFalla > 0 ? `Llegada tarde. Se penaliza con ${horasFalla} hora(s) de inasistencia.` : 'Asistencia puntual registrada (Validado por IA).');
 
       await run(`
         INSERT INTO attendance_records (
           id, session_id, institution_id, unit_id, person_id, documento, status, message,
           hora_ingreso_real, horas_programadas_sesion, horas_validadas_asistencia, horas_inasistencia_acumulada,
-          tipo_registro, created_at, client_ip
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          tipo_registro, created_at, client_ip, photo_evidence, verification_method, biometric_match_score
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
-        recId, session.id, session.institution_id, session.unit_id, person.id, documento, status,
-        horasFalla > 0 ? `Llegada tarde. Se penaliza con ${horasFalla} hora(s) de inasistencia.` : 'Asistencia puntual registrada.',
-        horaIngreso, horasProgramadas, horasAsistidas, horasFalla, tipoRegistro, now.toISOString(), clientIp
+        recId, session.id, session.institution_id, session.unit_id, person.id, documento, finalStatus, msg,
+        horaIngreso, horasProgramadas, horasAsistidas, horasFalla, tipoRegistro, now.toISOString(), clientIp,
+        photo_evidence, verification_method, biometric_match_score
       ]);
 
       const savedRecord = await get('SELECT * FROM attendance_records WHERE id = ?', [recId]);
@@ -950,7 +960,7 @@ export const resolveExcuse = async (req, res) => {
 export const selfRegisterCheckin = async (req, res) => {
   try {
     const { token } = req.params;
-    const { documento, nombre, password } = req.body;
+    const { documento, nombre, password, photo_reference } = req.body;
 
     if (!documento || !nombre) {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento y nombre son requeridos.' } });
@@ -986,9 +996,9 @@ export const selfRegisterCheckin = async (req, res) => {
       const personId = `per_${Date.now()}`;
       const hashedPwd = await bcrypt.hash(password || documento, 10);
       await run(`
-        INSERT INTO people (id, institution_id, documento, nombre, matricula, active, password, roles)
-        VALUES (?, ?, ?, ?, ?, 1, ?, ?)
-      `, [personId, session.institution_id, documento, nombre, `MAT-${documento}`, hashedPwd, JSON.stringify(['APRENDIZ'])]);
+        INSERT INTO people (id, institution_id, documento, nombre, matricula, active, password, roles, photo_reference, terms_accepted)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, 1)
+      `, [personId, session.institution_id, documento, nombre, `MAT-${documento}`, hashedPwd, JSON.stringify(['APRENDIZ']), photo_reference]);
 
       await run(`
         INSERT INTO enrollments (id, institution_id, unit_id, person_id, active)
@@ -1010,9 +1020,27 @@ export const selfRegisterCheckin = async (req, res) => {
     // Check duplicate
     const existingRecord = await get(`SELECT * FROM attendance_records WHERE session_id = ? AND person_id = ? AND status != 'rejected'`, [session.id, person.id]);
     if (existingRecord) {
-      const unit = await get('SELECT * FROM academic_units WHERE id = ?', [session.unit_id]);
+      const tokenPayload = {
+        id: person.id,
+        institutionId: person.institution_id,
+        documento: person.documento,
+        nombre: person.nombre,
+        roles: ['APRENDIZ']
+      };
+      const sessionToken = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
+
       return res.status(200).json({
-        data: { ...existingRecord, nombre: person.nombre, ficha: unit?.name || '', isNewStudent: false, alreadyRegistered: true }
+        data: {
+          token: sessionToken,
+          person: {
+            id: person.id,
+            nombre: person.nombre,
+            documento: person.documento,
+            photo_reference: person.photo_reference || '',
+            terms_accepted: person.terms_accepted || 0,
+            alreadyRegistered: true
+          }
+        }
       });
     }
 
@@ -1061,11 +1089,26 @@ export const selfRegisterCheckin = async (req, res) => {
       horaIngreso, horasProgramadas, horasAsistidas, horasFalla, tipoRegistro, now.toISOString(), getClientIp(req)
     ]);
 
-    const record = await get('SELECT * FROM attendance_records WHERE id = ?', [recId]);
-    const unit = await get('SELECT * FROM academic_units WHERE id = ?', [session.unit_id]);
+    const tokenPayload = {
+      id: person.id,
+      institutionId: person.institution_id,
+      documento: person.documento,
+      nombre: person.nombre,
+      roles: ['APRENDIZ']
+    };
+    const sessionToken = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
 
     return res.status(201).json({
-      data: { ...record, nombre: person.nombre, ficha: unit?.name || '', isNewStudent }
+      data: {
+        token: sessionToken,
+        person: {
+          id: person.id,
+          nombre: person.nombre,
+          documento: person.documento,
+          photo_reference: person.photo_reference || '',
+          terms_accepted: 1
+        }
+      }
     });
   } catch (err) {
     console.error('Self-register error:', err);
@@ -1506,4 +1549,103 @@ export const getCoordEvidences = async (req, res) => {
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
   }
 };
+
+// Delete student account (Habeas Data compliance)
+export const deleteStudentAccount = async (req, res) => {
+  try {
+    const personId = req.user.id;
+    const document = req.user.documento;
+
+    if (!personId) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'No se pudo identificar al usuario.' } });
+    }
+
+    // 1. Delete from enrollments
+    await run('DELETE FROM enrollments WHERE person_id = ?', [personId]);
+
+    // 2. Anonimize records in attendance_records (remove personal identification but keep record statistics)
+    await run(`
+      UPDATE attendance_records 
+      SET documento = '0000000000', reject_reason = 'Anonimizado por Habeas Data' 
+      WHERE person_id = ?
+    `, [personId]);
+
+    // 3. Delete from people
+    await run('DELETE FROM people WHERE id = ?', [personId]);
+
+    res.json({ data: { message: 'Cuenta y datos personales suprimidos correctamente de acuerdo con la Ley 1581.' } });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Accept student terms (Habeas Data compliance)
+export const acceptStudentTerms = async (req, res) => {
+  try {
+    const personId = req.user.id;
+    if (!personId) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'No se pudo identificar al usuario.' } });
+    }
+
+    await run('UPDATE people SET terms_accepted = 1 WHERE id = ?', [personId]);
+    res.json({ data: { success: true, message: 'Términos y condiciones aceptados.' } });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Get pending biometrics requests for instructor verification
+export const getPendingBiometrics = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const rows = await query(`
+      SELECT r.id as record_id, r.session_id, r.documento, r.photo_evidence, r.biometric_match_score, r.horas_inasistencia_acumulada, r.created_at, p.nombre, p.photo_reference
+      FROM attendance_records r
+      JOIN people p ON r.person_id = p.id
+      WHERE r.session_id = ? AND r.status = 'pending_biometric'
+    `, [sessionId]);
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+// Approve or Reject a biometric exception request
+export const resolveBiometricException = async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    const { status } = req.body; // 'approved' or 'rejected'
+
+    if (!status || !['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: "El estado debe ser 'approved' o 'rejected'." } });
+    }
+
+    const record = await get('SELECT * FROM attendance_records WHERE id = ?', [recordId]);
+    if (!record) {
+      return res.status(404).json({ error: { code: 'RECORD_NOT_FOUND', message: 'Registro de asistencia no encontrado.' } });
+    }
+
+    if (status === 'approved') {
+      // Determine final status based on accumulated late hours calculated during checkin
+      const finalStatus = record.horas_inasistencia_acumulada > 0 ? 'ASISTENCIA_PARCIAL' : 'accepted';
+      await run(`
+        UPDATE attendance_records
+        SET status = ?, message = 'Asistencia aprobada manualmente por el docente (Excepción biométrica).'
+        WHERE id = ?
+      `, [finalStatus, recordId]);
+    } else {
+      await run(`
+        UPDATE attendance_records
+        SET status = 'rejected', reject_reason = 'BIOMETRIC_REJECTED', message = 'Rechazado por verificación biométrica visual del docente.'
+        WHERE id = ?
+      `, [recordId]);
+    }
+
+    res.json({ data: { success: true, message: `Excepción biométrica ${status === 'approved' ? 'aprobada' : 'rechazada'} con éxito.` } });
+  } catch (err) {
+    res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
+  }
+};
+
+
 

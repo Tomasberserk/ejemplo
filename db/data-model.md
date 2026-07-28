@@ -1,149 +1,170 @@
-# Modelo de Datos MongoDB
+# Modelo de Datos Relacional (SQLite / PostgreSQL)
 
-## Alcance
+Este documento detalla el diseño de persistencia de datos implementado en el sistema `app-attendance`.
 
-Soporta asistencia academica para SENA y CORHUILA/Universidad con QR temporal, sin autenticacion y con datos precargados desde `db/source/seed_asistencia_corhuila_sena_mongo_local.json`.
+---
 
-## Glosario
+## 1. Alcance y Estrategia
 
-| Termino | Definicion | Traduccion tecnica |
-|---|---|---|
-| Institucion | SENA o CORHUILA/Universidad | `institutions` |
-| Ficha | Agrupacion academica SENA | `academic_units.type = ficha` |
-| Materia | Agrupacion academica universidad | `academic_units.type = materia` |
-| Aprendiz/Estudiante | Persona inscrita | `people` + `enrollments` |
-| Sesion de asistencia | Evento temporal abierto por instructor/docente | `attendance_sessions` |
-| Registro | Intento de marcar asistencia | `attendance_records` |
+El sistema utiliza una base de datos relacional portátil:
+- **SQLite3:** Para entornos de desarrollo local y pruebas (almacenada en el archivo local `back/database.sqlite`).
+- **PostgreSQL:** Conector listo para producción en la nube (ej. Vercel, Render) que se activa automáticamente al definir la variable de entorno `DATABASE_URL`.
 
-## Colecciones
+Los datos se inicializan automáticamente al arrancar el servidor mediante el script `initDb` ubicado en `back/src/db.js`. El seed carga configuraciones por defecto para la institución "SENA" (Fichas, Aprendices e Instructores) y "CORHUILA" (Docentes y Materias), manteniendo a "Tomas Berserk" como aprendiz de pruebas limpio en la base de datos.
 
-### `institutions`
+---
 
-| Campo | Tipo | Obligatorio | Justificacion |
-|---|---|---|---|
-| `_id` | ObjectId | Si | Identidad interna |
-| `code` | string | Si | Selector estable: SENA, CORHUILA |
-| `name` | string | Si | Nombre visible |
-| `context` | enum | Si | Diferencia `sena` y `university` |
-| `labels` | object | Si | Rol y nombres por institucion |
-| `theme` | object | Si | Visual parametrizable sin asumir colores oficiales |
-| `qr.ttlMinutes` | number | Si | TTL por defecto |
-| `active` | boolean | Si | Filtrado operativo |
-| `createdAt`, `updatedAt` | date | Si | Auditoria minima |
+## 2. Diagrama de Tablas y Relaciones
 
-### `academic_units`
+El esquema físico de base de datos se estructura bajo el siguiente modelo relacional:
 
-| Campo | Tipo | Obligatorio | Justificacion |
-|---|---|---|---|
-| `_id` | ObjectId | Si | Identidad interna |
-| `institutionId` | ObjectId | Si | Pertenece a institucion |
-| `code` | string | Si | Codigo de ficha o materia |
-| `name` | string | Si | Nombre visible |
-| `type` | enum | Si | `ficha` o `materia` |
-| `active` | boolean | Si | Filtrado operativo |
-| `createdAt`, `updatedAt` | date | Si | Auditoria minima |
-
-### `people`
-
-| Campo | Tipo | Obligatorio | Justificacion |
-|---|---|---|---|
-| `_id` | ObjectId | Si | Identidad interna |
-| `institutionId` | ObjectId | Si | Evita mezcla entre instituciones |
-| `documento` | string | Si | Dato visible y llave de registro desde QR |
-| `nombre` | string | Si | Dato visible |
-| `matricula` | string | Si | Dato visible institucional |
-| `active` | boolean | Si | Permite desactivar sin borrar |
-| `createdAt`, `updatedAt` | date | Si | Auditoria minima |
-
-### `enrollments`
-
-| Campo | Tipo | Obligatorio | Justificacion |
-|---|---|---|---|
-| `_id` | ObjectId | Si | Identidad interna |
-| `institutionId` | ObjectId | Si | Consulta por institucion |
-| `unitId` | ObjectId | Si | Ficha o materia |
-| `personId` | ObjectId | Si | Persona inscrita |
-| `active` | boolean | Si | Retiro o inactivacion |
-| `createdAt`, `updatedAt` | date | Si | Auditoria minima |
-
-### `attendance_sessions`
-
-| Campo | Tipo | Obligatorio | Justificacion |
-|---|---|---|---|
-| `_id` | ObjectId | Si | Identidad interna |
-| `institutionId` | ObjectId | Si | Validacion de contexto |
-| `unitId` | ObjectId | Si | Ficha o materia tomada |
-| `status` | enum | Si | `draft`, `active`, `closed`, `expired` |
-| `qrToken` | string | No | Token publico del QR, no contiene datos sensibles |
-| `qrExpiresAt` | date | No | Expiracion del QR |
-| `qrTtlMinutes` | number | Si | Minutos configurados |
-| `activatedAt` | date | No | Auditoria de activacion |
-| `closedAt` | date | No | Auditoria de cierre |
-| `createdAt`, `updatedAt` | date | Si | Auditoria minima |
-
-### `attendance_records`
-
-| Campo | Tipo | Obligatorio | Justificacion |
-|---|---|---|---|
-| `_id` | string/ObjectId | Si | Identidad interna |
-| `sessionId` | string/ObjectId | Si | Sesion evaluada |
-| `institutionId` | string/ObjectId | Si | Contexto de validacion |
-| `unitId` | string/ObjectId | Si | Ficha evaluada |
-| `personId` | string/ObjectId | No | Nulo en documento no encontrado |
-| `documento` | string | Si | Documento enviado desde QR |
-| `status` | enum | Si | `accepted`, `rejected`, `ASISTENCIA_PARCIAL` o `PRESENTE` |
-| `rejectReason` | enum | No | Motivo de rechazo (ej. `EXPIRED_QR`, `OUT_OF_SUBNET`, etc.) |
-| `message` | string | Si | Mensaje legible |
-| `hora_ingreso_real` | string | No | Hora de check-in (HH:MM:SS) |
-| `hora_salida_real` | string | No | Hora de check-out (HH:MM:SS) |
-| `horas_programadas_sesion` | number | Si | Total de horas de la sesión (ej. 6) |
-| `horas_validadas_asistencia` | number | Si | Horas asistidas calculadas (ej. 5 o 6) |
-| `horas_inasistencia_acumulada` | number | Si | Horas de falla acumuladas (ej. 1) |
-| `tipo_registro` | string | Si | Tipo de registro (ej. `REGULAR`, `RETARDO_BLOQUE_1`, `MANUAL_OVERRIDE`) |
-| `createdAt`, `updatedAt` | date | Si | Auditoria minima |
-
-### Estructura de Asistencia Fraccionada (No Binaria)
-
-En el MVP, la asistencia no es un valor booleano (Presente/Ausente). Se implementa un modelo de **Asistencia Fraccionada por Bloques Horarios**:
-
-- **Ventana de Puntualidad (0 a 15 min)**: Si se registra entrada entre las 06:00 y las 06:15, se otorgan 100% de horas (`horas_validadas_asistencia = 6`, `horas_inasistencia_acumulada = 0`).
-- **Cálculo de Retardo por Bloque**: Si se registra entrada después de las 06:15 (ej. a las 06:16), se descuenta el primer bloque horario completo de 1 hora. Se registra como `horas_validadas_asistencia = 5`, `horas_inasistencia_acumulada = 1`, `tipo_registro = 'RETARDO_BLOQUE_1'` y estado `ASISTENCIA_PARCIAL`.
-
-Ejemplo de JSON guardado en base de datos:
-```json
-{
-  "id_asistencia": "ast_99281",
-  "id_estudiante": "est_102",
-  "id_sala": "sala_sado_289123",
-  "fecha": "2026-07-11",
-  "hora_ingreso_real": "06:16:22",
-  "hora_salida_real": "12:01:05",
-  "horas_programadas_sesion": 6,
-  "horas_validadas_asistencia": 5,
-  "horas_inasistencia_acumulada": 1,
-  "tipo_registro": "RETARDO_BLOQUE_1"
-}
+```
+┌─────────────────┐             ┌──────────────────┐
+│   institutions  │◄───┐        │  academic_units  │
+├─────────────────┤    │        ├──────────────────┤
+│ id (PK, TEXT)   │    └───────-│ id (PK, TEXT)    │
+│ code (UQ, TEXT) │             │ institution_id   │
+└────────┬────────┘             │ code (UQ, TEXT)  │
+         │                      └────────┬─────────┘
+         │                               │
+         │ ┌─────────────────────────────┘
+         ▼ ▼
+┌─────────────────┐             ┌──────────────────┐
+│     people      │             │    enrollments   │
+├─────────────────┤             ├──────────────────┤
+│ id (PK, TEXT)   │◄────────────┤ id (PK, TEXT)    │
+│ institution_id  │             │ institution_id   │
+│ documento (TEXT)│◄───────────-│ unit_id (FK)     │
+│ password (TEXT) │             │ person_id (FK)   │
+│ roles (TEXT)    │             └──────────────────┘
+└────────┬────────┘
+         │
+         ▼
+┌──────────────────┐            ┌──────────────────┐
+│      excuses     │            │attendance_records│
+├──────────────────┤            ├──────────────────┤
+│ id (PK, TEXT)    │            │ id (PK, TEXT)    │
+│ session_id (FK)  │◄───────────┤ session_id (FK)  │
+│ person_id (FK)   │            │ person_id (FK)   │
+│ text (TEXT)      │            │ status (TEXT)    │
+└──────────────────┘            └──────────────────┘
 ```
 
-## Indices
+---
 
-- `institutions.code` unico.
-- `academic_units.institutionId + code` unico.
-- `people.institutionId + documento` unico.
-- `enrollments.unitId + personId` unico.
-- `attendance_sessions.qrToken` unico sparse.
-- `attendance_records.sessionId + personId + status` unico parcial para `accepted`.
+## 3. Diccionario de Tablas
 
-## Fuente real cargada
+### A. Tabla `institutions`
+Representa las organizaciones que utilizan la plataforma (ej. SENA, CORHUILA), permitiendo personalizar la interfaz.
+* `id` (TEXT, PRIMARY KEY): Identificador único de la institución.
+* `code` (TEXT, UNIQUE): Código corto identificador (ej. `'SENA'`, `'CORHUILA'`).
+* `name` (TEXT): Nombre completo de la institución.
+* `context` (TEXT): Tipo de contexto (ej. `'sena'`, `'university'`).
+* `labels` (TEXT): Formato JSON con etiquetas del sistema (ej. `{"role": "Instructor", "unit": "Ficha", "person": "Aprendiz"}`).
+* `theme` (TEXT): Colores institucionales en formato JSON (ej. `{"primary": "#39A900", "secondary": "#003049"}`).
+* `qr_ttl_minutes` (INTEGER): Tiempo de expiración por defecto de las salas de asistencia (minutos).
+* `active` (INTEGER): Define si está activa (1 = Activa, 0 = Inactiva).
 
-El seed oficial toma como entrada `db/source/seed_asistencia_corhuila_sena_mongo_local.json`.
+### B. Tabla `academic_units`
+Representa los grupos o clases (Fichas en el SENA, Materias en CORHUILA).
+* `id` (TEXT, PRIMARY KEY): Identificador único de la unidad.
+* `institution_id` (TEXT, FOREIGN KEY -> `institutions(id)`).
+* `code` (TEXT, UNIQUE): Código del curso o ficha académica.
+* `name` (TEXT): Nombre descriptivo.
+* `type` (TEXT): Tipo de unidad (ej. `'ficha'`, `'materia'`).
+* `active` (INTEGER): Estado del curso.
 
-Resumen de la fuente:
+### C. Tabla `people`
+Listado de usuarios registrados en el sistema (Instructores, Estudiantes, Aprendices, Coordinadores).
+* `id` (TEXT, PRIMARY KEY): Identificador único de la persona.
+* `institution_id` (TEXT, FOREIGN KEY -> `institutions(id)`).
+* `documento` (TEXT): Cédula o número de documento de identidad.
+* `nombre` (TEXT): Nombre completo.
+* `matricula` (TEXT): Código o número de matrícula institucional.
+* `active` (INTEGER): Estado de la cuenta.
+* `password` (TEXT): Contraseña en texto plano o hash Bcrypt.
+* `roles` (TEXT): Array JSON con los roles asignados (ej. `["INSTRUCTOR"]`, `["APRENDIZ"]`, `["COORDINADOR"]`).
+* *Restricción de Integridad:* `UNIQUE(institution_id, documento)`.
 
-- 2 instituciones: SENA y CORHUILA.
-- 6 materias CORHUILA.
-- 3 fichas SENA.
-- 265 filas de personas inscritas.
-- 253 personas unicas por institucion/documento.
+### D. Tabla `enrollments`
+Asocia los aprendices/estudiantes a sus respectivas fichas o materias matriculadas.
+* `id` (TEXT, PRIMARY KEY).
+* `institution_id` (TEXT, FOREIGN KEY).
+* `unit_id` (TEXT, FOREIGN KEY -> `academic_units(id)`).
+* `person_id` (TEXT, FOREIGN KEY -> `people(id)`).
+* `active` (INTEGER): Estado de la matrícula.
+* *Restricción de Integridad:* `UNIQUE(unit_id, person_id)`.
 
-Las personas duplicadas por documento dentro de una misma institucion se conservan como una sola persona y se relacionan con varias materias mediante `enrollments`.
+### E. Tabla `attendance_sessions`
+Registra las salas de control creadas por los instructores para la toma de asistencia.
+* `id` (TEXT, PRIMARY KEY): Código de la sesión (prefijo `sala_`).
+* `institution_id` (TEXT, FOREIGN KEY).
+* `unit_id` (TEXT, FOREIGN KEY -> `academic_units(id)`).
+* `status` (TEXT): Estado de la sesión (`'active'`, `'closed'`).
+* `qr_token` (TEXT): Token dinámico actual.
+* `qr_expires_at` (TEXT): Fecha ISO de expiración del token QR.
+* `qr_ttl_minutes` (INTEGER): Tiempo de expiración inicial.
+* `activated_at` (TEXT): Fecha ISO de activación.
+* `closed_at` (TEXT): Fecha ISO de clausura.
+* `room_created_at` (TEXT): Fecha de creación de la sala.
+* `room_expires_at` (TEXT): Fecha límite de vida de la sala.
+* `is_reopened` (INTEGER): Indica si la sala fue reabierta temporalmente (1 = Sí, 0 = No).
+* `creator_ip` (TEXT): IP del instructor que abrió la sala.
+* `ip_check_enabled` (INTEGER): Bandera de validación de IP (1 = Sí, 0 = No).
+* `evidence_submitted` (INTEGER): Indica si se subió la foto de evidencia.
+* `evidence_submitted_at` (TEXT): Fecha de carga de evidencia.
+
+### F. Tabla `attendance_records`
+Bitácora de registros individuales de asistencia de los estudiantes.
+* `id` (TEXT, PRIMARY KEY).
+* `session_id` (TEXT, FOREIGN KEY -> `attendance_sessions(id)`).
+* `institution_id` (TEXT, FOREIGN KEY).
+* `unit_id` (TEXT, FOREIGN KEY).
+* `person_id` (TEXT, FOREIGN KEY -> `people(id)`).
+* `documento` (TEXT): Documento enviado.
+* `status` (TEXT): Estado de la asistencia (`'accepted'`, `'rejected'`, `'ASISTENCIA_PARCIAL'`).
+* `reject_reason` (TEXT): Motivo del rechazo si aplica.
+* `message` (TEXT): Detalles descriptivos del resultado.
+* `hora_ingreso_real` (TEXT): Hora formateada (ej. `06:12:05`).
+* `hora_salida_real` (TEXT): Hora de salida (si registra reingreso).
+* `horas_programadas_sesion` (INTEGER): Total de horas de la clase (defecto: 6).
+* `horas_validadas_asistencia` (INTEGER): Horas que se le computan al aprendiz (6h a 0h).
+* `horas_inasistencia_acumulada` (INTEGER): Horas de inasistencia (falla acumulada).
+* `tipo_registro` (TEXT): Detalle del registro (ej. `'REGULAR'`, `'RETARDO_BLOQUE_1'`, `'MANUAL_OVERRIDE'`).
+* `created_at` (TEXT): Fecha de creación.
+* `client_ip` (TEXT): Dirección IP de la red del estudiante.
+
+### G. Tabla `excuses`
+Almacena justificaciones subidas por aprendices para inasistencias en sesiones pasadas.
+* `id` (TEXT, PRIMARY KEY).
+* `session_id` (TEXT, FOREIGN KEY).
+* `person_id` (TEXT, FOREIGN KEY).
+* `text` (TEXT): Justificación del aprendiz.
+* `file_name` (TEXT): Nombre de la imagen o archivo PDF.
+* `file_data` (TEXT): Datos del documento adjunto (codificado en Base64).
+* `status` (TEXT): Estado de la excusa (`'pending'`, `'approved'`, `'rejected'`).
+* `created_at` (TEXT).
+
+### H. Tabla `late_requests`
+Solicitudes de asistencia tardía por estudiantes que llegaron fuera de rango de sala activa.
+* `id` (TEXT, PRIMARY KEY).
+* `session_id` (TEXT).
+* `institution_id` (TEXT).
+* `unit_id` (TEXT).
+* `documento` (TEXT).
+* `nombre` (TEXT).
+* `justification` (TEXT).
+* `status` (TEXT): Estado de resolución (`'pending'`, `'resolved'`).
+* `horas_descontar` (INTEGER): Horas que se descontarán por tardanza.
+* `created_at` (TEXT).
+
+---
+
+## 4. Cálculo de Asistencia Fraccionada (Puntualidad)
+
+La asistencia se calcula aplicando las siguientes reglas:
+- **Margen de tolerancia:** Si el estudiante registra dentro de los primeros 15 minutos desde `activated_at`, se le validan **6 horas asistidas** y **0 horas de falla** (Estado: `REGULAR`).
+- **Descuento por bloques horarios:** Si se registra posterior al minuto 15, se calcula la diferencia en minutos contra `activated_at`. Cada hora transcurrida o fracción equivale al descuento de un bloque.
+  - Ej: Registro al minuto 25 → Retardo de 1 bloque → Asignadas: 5 horas, Fallas: 1 hora, Tipo: `RETARDO_BLOQUE_1`, Estado: `ASISTENCIA_PARCIAL`.
+  - Ej: Registro al minuto 70 → Retardo de 2 bloques → Asignadas: 4 horas, Fallas: 2 horas, Tipo: `RETARDO_BLOQUE_2`, Estado: `ASISTENCIA_PARCIAL`.
+- **Falla Total:** Si el estudiante no realiza check-in antes de cerrar la sesión, su registro queda como ausente (6 horas de falla, 0 horas asistidas, Tipo: `FALLA_TOTAL`).

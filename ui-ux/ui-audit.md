@@ -1,163 +1,49 @@
-# UI Audit — App Attendance
-_Generado por equipo experto PRODUCT_DESIGN_LEAD + SENIOR_UI_UX_DESIGNER_
+# UI Audit — App Attendance (Actualizado)
+
+Este documento registra la auditoría de interfaz de usuario (UI) y experiencia de usuario (UX) ejecutada sobre el frontend monolítico actual (`app/index.html` + `app.js`).
 
 ---
 
-## Diagnóstico por pantalla
+## 1. Evaluación General de Diseño
 
-### BackendConfigPage
-| Problema | Severidad |
-|----------|-----------|
-| Pantalla vacía excepto input + status panel | Alta |
-| Ningún contexto de onboarding — no explica por qué existe | Alta |
-| Status panel plano sin indicador visual de conexión | Media |
-| Botón "Validar" sin estado loading / feedback | Media |
-| No hay jerarquía visual: todo al mismo nivel | Alta |
-
-**Recomendación:** Rediseñar como pantalla de onboarding con guía de pasos.
+El sistema implementa un estilo visual de **Glassmorphic UI Oscuro** que genera una experiencia premium y moderna:
+* **Puntos Fuertes (UX/UI):**
+  - Gran contraste en pantallas oscuras gracias al uso de gradientes verdes y azules institucionales.
+  - El uso de la tipografía "Outfit" le otorga un estilo moderno y limpio.
+  - Los estados semánticos de alerta (éxito en verde, retardo en amarillo y reyecciones en rojo) son altamente legibles.
+  - El indicador de salud de la API (`apiStatusDot`) aporta confianza técnica al usuario antes de iniciar la jornada.
 
 ---
 
-### LoginPage
-| Problema | Severidad |
-|----------|-----------|
-| Hero funcional pero el ícono (bookOutline) no comunica "asistencia" ni identidad | Baja |
-| Card con IonList adentro — mezcla estilos Ionic con card custom | Media |
-| Microcopy "Ingresa con tu documento" podría ser más orientativo | Baja |
+## 2. Diagnóstico de Pantallas e Interfaces
 
-**Estado:** Mayormente resuelto en sesiones previas. Revisión menor.
+### A. Pantalla de Bienvenida y Selección de Rol
+* **Estado:** ✅ Excelente estado.
+* **Detalle:** Conmutar entre el lector QR de cámara y el login administrativo es claro y responsive.
+* **Mejora Sugerida:** El ícono del escáner podría tener una micro-animación de respiración para llamar más a la acción.
 
----
+### B. Lector de QR Móvil e Ingreso Manual
+* **Estado:** ⚠️ Operativo con observaciones.
+* **Detalle:** La integración de la cámara mediante `html5-qrcode` funciona bien, pero en pantallas pequeñas del celular el visor de cámara puede requerir scroll.
+* **Mejora Sugerida:** Limitar el tamaño del contenedor del lector a un máximo de 250px en CSS móvil.
 
-### InstitutionPage
-| Problema | Severidad |
-|----------|-----------|
-| `institution-tile` sin avatar/icono institucional | Alta |
-| Solo borde de color = semáforo de prototipo | Alta |
-| `tile-mark` (barra de 5px) no comunica identidad institucional | Alta |
-| Sin contraste visual entre instituciones | Media |
-| Card mínima: solo código, nombre, metadatos | Media |
+### C. Panel del Instructor (Dashboard)
+* **Estado:** ✅ Funcional y coherente.
+* **Detalle:** Las pestañas de Control, Reports, Excuses y Late Requests segmentan bien las tareas diarias del docente.
+* **Mejora Sugerida:** Al descargar el Excel, el botón `btnPrintReport` (que en realidad exporta a XLSX) no indica claramente en su texto que descargará un archivo Excel; se sugiere renombrarlo a "Exportar Excel".
 
-**Recomendación:** Tiles con área de color de cabecera, iniciales como avatar, nombre completo prominente.
-
----
-
-### UnitSelectionPage
-| Problema | Severidad |
-|----------|-----------|
-| Lista IonList básica sin diferenciación visual | Media |
-| Tipo de unidad (badge-neutral) — todos idénticos | Baja |
-| Sin contador de personas por unidad | Baja |
-| Unidad seleccionada solo visible por checkmark pequeño | Media |
-| Sin agrupación por tipo si hay muchas unidades | Baja |
-
-**Recomendación:** Filas más ricas con tipo como chip de color, estado seleccionado más prominente.
+### D. Portal del Estudiante (Asistencia QR)
+* **Estado:** ✅ Excelente estado.
+* **Detalle:** La transición paso a paso (Documento -> Login/Contraseña -> Resultado de Asistencia) es fluida.
+* **Mejora Sugerida:** Añadir un botón para que el estudiante pueda ver su contraseña oculta antes de enviar.
 
 ---
 
-### DashboardPage
-| Problema | Severidad |
-|----------|-----------|
-| Hero sin estado de sesión visible | Media |
-| 5 action cards sin agrupación conceptual | Baja |
-| Métricas sin contexto semántico fuerte | Baja |
-| Unit warning banner funcional pero genérico | Baja |
+## 3. Estado de Componentes Clave
 
-**Estado:** Mayormente resuelto en sesiones previas. Mejora menor.
-
----
-
-### SessionPage
-| Problema | Severidad |
-|----------|-----------|
-| QR panel sin marco visual premium | Media |
-| Room code card buen punto de partida pero podrían ser más grandes | Media |
-| Stepper correcto pero labels muy pequeñas | Baja |
-| Sin feedback visual de sesión creada vs. activa | Media |
-| Botón Cerrar sesión en la parte inferior puede perderse | Baja |
-
-**Recomendación:** Room code como elemento hero central; QR con fondo blanco y sombra.
-
----
-
-### CheckinPage
-| Problema | Severidad |
-|----------|-----------|
-| IonList con info de sesión es texto plano | Media |
-| Sin instrucción visual clara de "debes estar en el aula" | Alta |
-| Código OTP buen diseño pero falta contexto institucional | Media |
-| Result banner puede mejorar tamaño y legibilidad | Baja |
-| Loading state no tiene feedback visual en el botón | Baja |
-
----
-
-### ResultsPage
-| Problema | Severidad |
-|----------|-----------|
-| Exportar Excel como `fill="outline"` se pierde visualmente | Baja |
-| Segmentos con contadores correctos | ✅ |
-| Métricas con semántica de colores correctas | ✅ |
-| Progress bar funcional | ✅ |
-
-**Estado:** Pantalla en buen estado. Mejora menor.
-
----
-
-### HistoryPage
-| Problema | Severidad |
-|----------|-----------|
-| Lista sin agrupación temporal (hoy/semana/anteriores) | Media |
-| Todas las filas idénticas — sin diferenciación visual por estado | Media |
-| Unidad académica como h2 sin contexto adicional | Baja |
-| Sin indicador de cantidad de asistentes por sesión si disponible | Baja |
-
----
-
-### PeoplePage
-| Problema | Severidad |
-|----------|-----------|
-| Sin contador total en el header | Baja |
-| Avatares correctos | ✅ |
-| Sin búsqueda (pendiente para futura iteración) | Baja |
-
----
-
-## Problemas transversales
-1. **Header blanco plano** — sin identidad visual de marca
-2. **Sin subtitle contextual** en header (institución/unidad activa)
-3. **Footer nav** con 6 items en 360px puede sentirse apretado
-4. **ion-item** con fondo blanco dentro de surface-1 — mismo tono
-5. **Botones de acción principal** a veces pierden jerarquía vs. secundarios
-6. **Estados vacíos** consistentes pero sin contexto de acción
-
----
-
-## Componentes que deben rediseñarse
-- `InstitutionPage` tiles (prioridad alta)
-- `BackendConfigPage` (prioridad alta)
-- `CheckinPage` context (prioridad media)
-- `SessionPage` QR panel (prioridad media)
-- `HistoryPage` rows (prioridad baja)
-
-## Componentes en buen estado
-- `MetricGrid` — sistema de variantes funcional ✅
-- `PersonRows` / `RejectionRows` — avatares y chips ✅
-- `EmptyState` — consistente ✅
-- `SessionPage` stepper — correcto ✅
-- `CheckinPage` OTP input — premium ✅
-
----
-
-## Riesgo por archivo
-| Archivo | Cambio | Riesgo |
-|---------|--------|--------|
-| app.css | Header gradient fix + nuevas clases | Bajo |
-| variables.css | Tokens adicionales | Bajo |
-| App.tsx | Subtitle en header | Bajo |
-| BackendConfigPage.tsx | Restructurar JSX | Bajo (solo UI) |
-| InstitutionPage.tsx | Tiles con avatar | Bajo (solo UI) |
-| UnitSelectionPage.tsx | Filas ricas | Bajo (solo UI) |
-| DashboardPage.tsx | Hero session status | Bajo (solo UI) |
-| SessionPage.tsx | QR panel premium | Bajo (solo UI) |
-| CheckinPage.tsx | Contexto estudiante | Bajo (solo UI) |
-| HistoryPage.tsx | Timeline visual | Bajo (solo UI) |
+| Componente | Estado | Calificación | Comentario |
+|---|---|---|---|
+| **Contadores de Asistentes** | ✅ Aceptado | ⭐⭐⭐⭐⭐ | Los pills de estadística de presentes y ausentes se actualizan bien. |
+| **Grilla de Asistencia** | ✅ Aceptado | ⭐⭐⭐⭐☆ | El buscador filtra en tiempo real en base a los caracteres ingresados. |
+| **Contenedor del QR** | ✅ Aceptado | ⭐⭐⭐⭐⭐ | Renderiza el QR en tiempo de ejecución y muestra la cuenta regresiva de 15 segundos claramente. |
+| **Bandeja de Excusas** | ✅ Aceptado | ⭐⭐⭐⭐☆ | Muestra las justificaciones en texto y permite ver adjuntos Base64 directamente. |

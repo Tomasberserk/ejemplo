@@ -81,6 +81,11 @@ const btnTabLateRequests = document.getElementById('btnTabLateRequests');
 const tabContentLateRequests = document.getElementById('tabContentLateRequests');
 const lateRequestsLoading = document.getElementById('lateRequestsLoading');
 
+const btnTabBiometrics = document.getElementById('btnTabBiometrics');
+const tabContentBiometrics = document.getElementById('tabContentBiometrics');
+const biometricsLoading = document.getElementById('biometricsLoading');
+const biometricsGridBody = document.getElementById('biometricsGridBody');
+
 // Coordinator Elements
 const coordDashboardScreen = document.getElementById('coordDashboardScreen');
 const btnCoordTabInstructors = document.getElementById('btnCoordTabInstructors');
@@ -122,12 +127,22 @@ const searchStudentInput = document.getElementById('searchStudentInput');
 const btnBulkMarkPresent = document.getElementById('btnBulkMarkPresent');
 
 // Initialize API configuration
-apiUrlInput.value = localStorage.getItem('apiUrl') || window.location.origin;
-state.apiUrl = apiUrlInput.value;
+// Initialize API configuration
+let rawApiUrl = localStorage.getItem('apiUrl') || window.location.origin;
+if (rawApiUrl.endsWith('/')) {
+  rawApiUrl = rawApiUrl.slice(0, -1);
+}
+apiUrlInput.value = rawApiUrl;
+state.apiUrl = rawApiUrl;
 
 apiUrlInput.addEventListener('change', () => {
-  state.apiUrl = apiUrlInput.value.trim();
-  localStorage.setItem('apiUrl', state.apiUrl);
+  let val = apiUrlInput.value.trim();
+  if (val.endsWith('/')) {
+    val = val.slice(0, -1);
+  }
+  apiUrlInput.value = val;
+  state.apiUrl = val;
+  localStorage.setItem('apiUrl', val);
   checkApiHealth();
 });
 
@@ -895,10 +910,12 @@ btnTabControl.addEventListener('click', () => {
   btnTabReport.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   btnTabExcuses.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   btnTabLateRequests.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabBiometrics.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   tabContentControl.classList.remove('hidden');
   tabContentReport.classList.add('hidden');
   tabContentExcuses.classList.add('hidden');
   tabContentLateRequests.classList.add('hidden');
+  tabContentBiometrics.classList.add('hidden');
 });
 
 btnTabReport.addEventListener('click', () => {
@@ -907,10 +924,12 @@ btnTabReport.addEventListener('click', () => {
   btnTabControl.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   btnTabExcuses.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   btnTabLateRequests.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabBiometrics.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   tabContentControl.classList.add('hidden');
   tabContentReport.classList.remove('hidden');
   tabContentExcuses.classList.add('hidden');
   tabContentLateRequests.classList.add('hidden');
+  tabContentBiometrics.classList.add('hidden');
   fetchReportData();
 });
 
@@ -920,10 +939,12 @@ btnTabExcuses.addEventListener('click', () => {
   btnTabControl.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   btnTabReport.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   btnTabLateRequests.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabBiometrics.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   tabContentControl.classList.add('hidden');
   tabContentReport.classList.add('hidden');
   tabContentExcuses.classList.remove('hidden');
   tabContentLateRequests.classList.add('hidden');
+  tabContentBiometrics.classList.add('hidden');
   fetchInstructorExcuses();
 });
 
@@ -933,11 +954,28 @@ btnTabLateRequests.addEventListener('click', () => {
   btnTabControl.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   btnTabReport.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   btnTabExcuses.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabBiometrics.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
   tabContentControl.classList.add('hidden');
   tabContentReport.classList.add('hidden');
   tabContentExcuses.classList.add('hidden');
   tabContentLateRequests.classList.remove('hidden');
+  tabContentBiometrics.classList.add('hidden');
   fetchLateRequests();
+});
+
+btnTabBiometrics.addEventListener('click', () => {
+  state.activeTab = 'biometrics';
+  btnTabBiometrics.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-[#39A900] text-white transition-all';
+  btnTabControl.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabReport.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabExcuses.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  btnTabLateRequests.className = 'tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all';
+  tabContentControl.classList.add('hidden');
+  tabContentReport.classList.add('hidden');
+  tabContentExcuses.classList.add('hidden');
+  tabContentLateRequests.classList.add('hidden');
+  tabContentBiometrics.classList.remove('hidden');
+  fetchPendingBiometrics();
 });
 
 // Report View Fetch
@@ -960,13 +998,14 @@ async function fetchReportData() {
       state.lastReportData = reportData;
       renderReportGrid(reportData);
 
-      // Condition: ONLY enable report if session is reopened (meaning both entry and exit rooms created)
+      // Enable report downloads (Excel/PDF) unconditionally once the session is loaded
+      btnPrint.classList.remove('opacity-50', 'pointer-events-none');
+      btnPdf.classList.remove('opacity-50', 'pointer-events-none');
+      warning.classList.add('hidden');
+
+      // Condition: ONLY enable official evidence submission if session is reopened (both entry and exit rooms created)
       const isReopened = state.activeSession.is_reopened === 1;
       if (isReopened) {
-        btnPrint.classList.remove('opacity-50', 'pointer-events-none');
-        btnPdf.classList.remove('opacity-50', 'pointer-events-none');
-        warning.classList.add('hidden');
-
         // Check if evidence is already submitted
         if (state.activeSession.evidence_submitted === 1) {
           btnEvidence.classList.add('pointer-events-none');
@@ -979,10 +1018,7 @@ async function fetchReportData() {
           btnEvidence.querySelector('span').textContent = 'Entregar Evidencia';
         }
       } else {
-        btnPrint.classList.add('opacity-50', 'pointer-events-none');
-        btnPdf.classList.add('opacity-50', 'pointer-events-none');
         btnEvidence.classList.add('opacity-50', 'pointer-events-none');
-        warning.classList.remove('hidden');
       }
     }
   } catch (err) {
@@ -1582,6 +1618,137 @@ window.resolveLateRequest = async (id, status) => {
   } catch (err) {
     alert('Error al resolver la solicitud tardía.');
   }
+};
+
+// --- BIOMETRICS EXCEPTIONS LOGIC ---
+async function fetchPendingBiometrics() {
+  if (!state.activeSession) {
+    biometricsGridBody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-slate-500">Inicie o seleccione una sesión de clase para revisar excepciones biométricas.</td></tr>`;
+    return;
+  }
+  biometricsLoading.classList.remove('hidden');
+  biometricsGridBody.innerHTML = '';
+  try {
+    const res = await fetch(`${state.apiUrl}/api/sessions/${state.activeSession.id}/pending-biometrics`, {
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    if (handleAuthError(res)) return;
+
+    const result = await res.json();
+    if (res.ok) {
+      renderBiometrics(result.data);
+    } else {
+      console.error('Error fetching biometrics:', result.error.message);
+      biometricsGridBody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-red-400">Error al cargar excepciones.</td></tr>`;
+    }
+  } catch (err) {
+    console.error('Error fetching biometrics:', err);
+    biometricsGridBody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-red-400">Error de conexión.</td></tr>`;
+  } finally {
+    biometricsLoading.classList.add('hidden');
+  }
+}
+
+function renderBiometrics(records) {
+  biometricsGridBody.innerHTML = '';
+
+  if (!records || records.length === 0) {
+    biometricsGridBody.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-center py-8 text-slate-500">No hay excepciones biométricas pendientes.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  records.forEach(r => {
+    const photoRefHtml = r.photo_reference 
+      ? `<img src="${r.photo_reference}" class="w-12 h-12 object-cover rounded-lg border border-slate-700 mx-auto cursor-pointer" onclick="viewPhotoInModal('${r.photo_reference}', 'Foto de Registro - ${r.nombre}')" title="Ver en tamaño completo">`
+      : '<span class="text-xs text-slate-500">Sin foto</span>';
+
+    const photoEvidenceHtml = r.photo_evidence 
+      ? `<img src="${r.photo_evidence}" class="w-12 h-12 object-cover rounded-lg border border-slate-700 mx-auto cursor-pointer" onclick="viewPhotoInModal('${r.photo_evidence}', 'Intento de Captura - ${r.nombre}')" title="Ver en tamaño completo">`
+      : '<span class="text-xs text-slate-500">Sin foto</span>';
+
+    const similarityVal = r.biometric_match_score !== null ? Math.max(0, Math.min(100, Math.round((1 - r.biometric_match_score) * 100))) : 0;
+    const matchHtml = `<div class="text-center">
+      <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-bold ${similarityVal >= 65 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}">${similarityVal}%</span>
+      <span class="block text-[9px] text-slate-500 mt-0.5">Mínimo: 65%</span>
+    </div>`;
+
+    const sentAt = r.created_at ? new Date(r.created_at).toLocaleString('es-CO') : '-';
+
+    const actionsCol = `
+      <div class="flex items-center justify-center gap-2">
+        <button onclick="resolveBiometric('${r.record_id}', 'approved')" class="text-xs bg-[#39A900]/15 hover:bg-[#39A900]/25 border border-[#39A900]/20 text-[#39A900] px-2.5 py-1.5 rounded-lg transition-all font-semibold">
+          Aprobar
+        </button>
+        <button onclick="resolveBiometric('${r.record_id}', 'rejected')" class="text-xs bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-2.5 py-1.5 rounded-lg transition-all font-semibold">
+          Rechazar
+        </button>
+      </div>
+    `;
+
+    biometricsGridBody.innerHTML += `
+      <tr class="hover:bg-slate-900/20 border-b border-slate-800/40">
+        <td class="py-3 px-4 font-medium text-slate-200">${r.nombre || '-'}</td>
+        <td class="py-3 px-4 text-slate-400 font-mono text-xs">${r.documento || '-'}</td>
+        <td class="py-3 px-4 text-center">${photoRefHtml}</td>
+        <td class="py-3 px-4 text-center">${photoEvidenceHtml}</td>
+        <td class="py-3 px-4">${matchHtml}</td>
+        <td class="py-3 px-4 font-mono text-xs">${sentAt}</td>
+        <td class="py-3 px-4 text-center">${actionsCol}</td>
+      </tr>
+    `;
+  });
+}
+
+window.resolveBiometric = async (recordId, status) => {
+  const confirmMsg = status === 'approved'
+    ? '¿Aprobar esta asistencia de aprendiz confirmando que el rostro coincide visualmente?'
+    : '¿Rechazar esta asistencia por falta de coincidencia biométrica/visual?';
+
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const res = await fetch(`${state.apiUrl}/api/attendance/resolve-biometric/${recordId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.token}`
+      },
+      body: JSON.stringify({ status })
+    });
+    const result = await res.json();
+    if (res.ok) {
+      alert(result.data.message);
+      fetchPendingBiometrics();
+    } else {
+      alert(`Error: ${result.error.message}`);
+    }
+  } catch (err) {
+    alert('Error al resolver la excepción biométrica.');
+  }
+};
+
+window.viewPhotoInModal = (src, title) => {
+  let modal = document.getElementById('photo-preview-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'photo-preview-modal';
+    modal.className = 'fixed inset-0 bg-black/95 z-[9999] flex flex-col items-center justify-center p-4 backdrop-blur-sm';
+    modal.innerHTML = `
+      <div class="relative max-w-lg w-full flex flex-col gap-4">
+        <h4 id="photo-modal-title" class="text-sm font-bold text-white text-center"></h4>
+        <img id="photo-modal-img" src="" class="w-full max-h-[70vh] object-contain rounded-2xl border border-slate-800">
+        <button onclick="document.getElementById('photo-preview-modal').classList.add('hidden')" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold py-2 px-6 rounded-xl text-xs transition-all mx-auto block">Cerrar Vista</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+  document.getElementById('photo-modal-title').textContent = title;
+  document.getElementById('photo-modal-img').src = src;
+  modal.classList.remove('hidden');
 };
 
 // Search Filter Listener
