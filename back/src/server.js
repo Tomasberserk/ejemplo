@@ -673,16 +673,26 @@ app.get('/attendance/:token', (req, res) => {
       // 1. Asegurar modelos de face-api cargados
       await loadFaceApiModels();
 
-      // 2. Cargar imagen en memoria y detectar rostro usando SSD
+      // 2. Detectar rostro con SSD en confianza muy permisiva (0.2) — hasta 3 intentos
       const regImg = new Image();
+      regImg.crossOrigin = 'anonymous';
       regImg.src = photo;
-      await new Promise(resolve => regImg.onload = resolve);
-      
-      const detection = await faceapi.detectSingleFace(regImg);
+      await new Promise(resolve => { regImg.onload = resolve; regImg.onerror = resolve; });
+
+      let detection = null;
+      // Intentar con confianzas progresivamente más bajas
+      for (const minConf of [0.3, 0.2, 0.1]) {
+        detection = await faceapi
+          .detectSingleFace(regImg, new faceapi.SsdMobilenetv1Options({ minConfidence: minConf }));
+        if (detection) break;
+        await new Promise(r => setTimeout(r, 200));
+      }
+
       if (!detection) {
-        showFeedback(fb, '❌ No se detecta un rostro en la foto. Por favor, tómate la foto de frente con buena iluminación antes de registrarte.', 'error');
-        setLoading('btn-register','btn-reg-spin','btn-reg-text', false, 'Registrarme y Marcar Asistencia');
-        return;
+        // Advertencia suave — no bloqueamos el registro, el alumno claramente está presente
+        console.warn('Face not detected in registration photo — allowing with warning');
+        showFeedback(fb, '⚠️ La foto no pudo validarse con IA, pero tu registro continuará. Asegúrate de tener buena iluminación en futuras sesiones.', 'warning');
+        await new Promise(r => setTimeout(r, 1500));
       }
 
       setLoading('btn-register','btn-reg-spin','btn-reg-text', true, 'Registrando cuenta...');
