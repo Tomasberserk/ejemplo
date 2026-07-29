@@ -583,11 +583,11 @@ function startSessionPolling() {
     fetchRealTimeAttendance();
   }, 10000);
 
-  // QR rotation polling every 15 seconds
+  // QR rotation polling every 60 seconds
   rotateQrCode();
   state.qrRotationInterval = setInterval(() => {
     rotateQrCode();
-  }, 15000);
+  }, 60000);
 
   // Room expiration countdown every 1 second
   startRoomCountdown();

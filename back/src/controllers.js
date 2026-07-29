@@ -14,9 +14,10 @@ const getClientIp = (req) => {
   return req.socket.remoteAddress || req.ip;
 };
 
-// QR Token generator based on 15-second blocks
+// QR Token generator based on 60-second blocks
+const QR_BLOCK_MS = 60000; // 1 minute per QR token
 export const generateQrToken = (sessionId, timeOffset = 0) => {
-  const blockIndex = Math.floor((Date.now() + timeOffset) / 15000);
+  const blockIndex = Math.floor((Date.now() + timeOffset) / QR_BLOCK_MS);
   return crypto
     .createHmac('sha256', 'qr-rotation-salt')
     .update(`${sessionId}_${blockIndex}`)
@@ -273,7 +274,7 @@ export const getSession = async (req, res) => {
     
     // Add current rotation token to check
     session.currentQrToken = generateQrToken(sessionId, 0);
-    session.qrRotationSec = 15 - Math.floor((Date.now() % 15000) / 1000);
+    session.qrRotationSec = 60 - Math.floor((Date.now() % 60000) / 1000);
 
     res.json({ data: session });
   } catch (err) {
@@ -286,7 +287,7 @@ export const getSessionQrToken = async (req, res) => {
     const { sessionId } = req.params;
     res.json({
       qrToken: generateQrToken(sessionId, 0),
-      expiresSec: 15 - Math.floor((Date.now() % 15000) / 1000)
+      expiresSec: 60 - Math.floor((Date.now() % 60000) / 1000)
     });
   } catch (err) {
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
@@ -316,8 +317,8 @@ export const checkDocument = async (req, res) => {
     let session = null;
     const activeSessions = await query("SELECT * FROM attendance_sessions WHERE status = 'active'");
     for (const s of activeSessions) {
-      for (let i = -1; i <= 20; i++) {
-        const tok = generateQrToken(s.id, -i * 15000);
+      for (let i = -1; i <= 10; i++) {
+        const tok = generateQrToken(s.id, -i * 60000);
         if (matchToken(token, tok)) { session = s; break; }
       }
       if (session) break;
@@ -365,11 +366,11 @@ export const checkin = async (req, res) => {
     if (bodySessionId) {
       session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [bodySessionId]);
     } else {
-      // Find session by matching rotating token (with 5-minute leeway = 20 blocks of 15s)
+      // Find session by matching rotating token (with 10-minute leeway = 10 blocks of 60s)
       const activeSessions = await query("SELECT * FROM attendance_sessions WHERE status = 'active'");
       for (const s of activeSessions) {
-        for (let i = -1; i <= 20; i++) {
-          const offset = -i * 15000;
+        for (let i = -1; i <= 10; i++) {
+          const offset = -i * 60000;
           const tok = generateQrToken(s.id, offset);
           if (matchToken(token, tok)) {
             session = s;
@@ -966,12 +967,12 @@ export const selfRegisterCheckin = async (req, res) => {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento y nombre son requeridos.' } });
     }
 
-    // Find session by token (with 5-minute leeway)
+    // Find session by token (with 10-minute leeway = 10 blocks of 60s)
     let session = null;
     const activeSessions = await query("SELECT * FROM attendance_sessions WHERE status = 'active'");
     for (const s of activeSessions) {
-      for (let i = -1; i <= 20; i++) {
-        const tok = generateQrToken(s.id, -i * 15000);
+      for (let i = -1; i <= 10; i++) {
+        const tok = generateQrToken(s.id, -i * 60000);
         if (matchToken(token, tok)) { session = s; break; }
       }
       if (session) break;
@@ -1131,8 +1132,8 @@ export const submitLateRequest = async (req, res) => {
     let session = null;
     const sessions = await query("SELECT * FROM attendance_sessions WHERE status != 'draft' ORDER BY created_at DESC");
     for (const s of sessions) {
-      for (let i = -1; i <= 480; i++) { // 480 x 15s = 2 hours
-        const tok = generateQrToken(s.id, -i * 15000);
+      for (let i = -1; i <= 120; i++) { // 120 x 60s = 2 hours
+        const tok = generateQrToken(s.id, -i * 60000);
         if (matchToken(token, tok)) { session = s; break; }
       }
       if (session) break;
@@ -1437,8 +1438,8 @@ export const studentLateCheckin = async (req, res) => {
     let session = null;
     const sessions = await query("SELECT * FROM attendance_sessions WHERE status != 'draft' ORDER BY created_at DESC");
     for (const s of sessions) {
-      for (let i = -1; i <= 480; i++) { // 2 hours window
-        const tok = generateQrToken(s.id, -i * 15000);
+      for (let i = -1; i <= 120; i++) { // 120 x 60s = 2 hours window
+        const tok = generateQrToken(s.id, -i * 60000);
         if (matchToken(token, tok)) { session = s; break; }
       }
       if (session) break;
