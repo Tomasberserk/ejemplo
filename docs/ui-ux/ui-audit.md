@@ -15,27 +15,23 @@ El sistema implementa un estilo visual de **Glassmorphic UI Oscuro** que genera 
 
 ---
 
-## 2. Diagnóstico de Pantallas e Interfaces
+## 2. Diagnóstico de Pantallas e Interfaces (Mejoras DEV 1 Aplicadas)
 
 ### A. Pantalla de Bienvenida y Selección de Rol
-* **Estado:** ✅ Excelente estado.
-* **Detalle:** Conmutar entre el lector QR de cámara y el login administrativo es claro y responsive.
-* **Mejora Sugerida:** El ícono del escáner podría tener una micro-animación de respiración para llamar más a la acción.
+* **Estado:** ✅ Excelente estado (⭐⭐⭐⭐⭐).
+* **Detalle:** Conmutar entre el lector QR de cámara y el login administrativo es claro, ágil y totalmente responsive.
 
 ### B. Lector de QR Móvil e Ingreso Manual
-* **Estado:** ⚠️ Operativo con observaciones.
-* **Detalle:** La integración de la cámara mediante `html5-qrcode` funciona bien, pero en pantallas pequeñas del celular el visor de cámara puede requerir scroll.
-* **Mejora Sugerida:** Limitar el tamaño del contenedor del lector a un máximo de 250px en CSS móvil.
+* **Estado:** ✅ Optimizado (⭐⭐⭐⭐⭐).
+* **Mejora Aplicada (DEV 1):** Se acotó el contenedor de captura de cámara a un máximo de `250px` de altura tanto en la SPA (`#reader`) como en el portal del aprendiz (`#qr-reader-container`), eliminando el scroll vertical en smartphones compactos.
 
-### C. Panel del Instructor (Dashboard)
-* **Estado:** ✅ Funcional y coherente.
-* **Detalle:** Las pestañas de Control, Reports, Excuses y Late Requests segmentan bien las tareas diarias del docente.
-* **Mejora Sugerida:** Al descargar el Excel, el botón `btnPrintReport` (que en realidad exporta a XLSX) no indica claramente en su texto que descargará un archivo Excel; se sugiere renombrarlo a "Exportar Excel".
+### C. Panel del Instructor (Dashboard) y Exportaciones
+* **Estado:** ✅ Optimizado (⭐⭐⭐⭐⭐).
+* **Mejora Aplicada (DEV 1):** Se renombró el botón de exportación a **"Exportar Excel (.xlsx)"** con tooltip descriptivo y se jerarquizó el botón de **"Exportar PDF SENA"**, eliminando la confusión con la etiqueta previa de "Imprimir".
 
-### D. Portal del Estudiante (Asistencia QR)
-* **Estado:** ✅ Excelente estado.
-* **Detalle:** La transición paso a paso (Documento -> Login/Contraseña -> Resultado de Asistencia) es fluida.
-* **Mejora Sugerida:** Añadir un botón para que el estudiante pueda ver su contraseña oculta antes de enviar.
+### D. Formularios de Acceso y Seguridad Visual
+* **Estado:** ✅ Optimizado (⭐⭐⭐⭐⭐).
+* **Mejora Aplicada (DEV 1):** Se incorporaron botones interactivos de alternancia de visibilidad (👁️ Ver/Ocultar contraseña) en el Login del Instructor, en el Login del Aprendiz y en el formulario de Auto-registro en caliente.
 
 ---
 
@@ -43,7 +39,9 @@ El sistema implementa un estilo visual de **Glassmorphic UI Oscuro** que genera 
 
 | Componente | Estado | Calificación | Comentario |
 |---|---|---|---|
-| **Contadores de Asistentes** | ✅ Aceptado | ⭐⭐⭐⭐⭐ | Los pills de estadística de presentes y ausentes se actualizan bien. |
-| **Grilla de Asistencia** | ✅ Aceptado | ⭐⭐⭐⭐☆ | El buscador filtra en tiempo real en base a los caracteres ingresados. |
-| **Contenedor del QR** | ✅ Aceptado | ⭐⭐⭐⭐⭐ | Renderiza el QR en tiempo de ejecución y muestra la cuenta regresiva de 15 segundos claramente. |
-| **Bandeja de Excusas** | ✅ Aceptado | ⭐⭐⭐⭐☆ | Muestra las justificaciones en texto y permite ver adjuntos Base64 directamente. |
+| **Contadores de Asistentes** | ✅ Aceptado | ⭐⭐⭐⭐⭐ | Los pills de estadística de presentes y ausentes se actualizan en tiempo real. |
+| **Grilla de Asistencia** | ✅ Aceptado | ⭐⭐⭐⭐⭐ | Buscador en tiempo real y selector de anulación manual de alta agilidad. |
+| **Contenedor del QR Proyectado** | ✅ Aceptado | ⭐⭐⭐⭐⭐ | Renderiza el QR en tiempo de ejecución con cuenta regresiva estable de 60 segundos. |
+| **Visor de Cámara Móvil** | ✅ Aceptado | ⭐⭐⭐⭐⭐ | Dimensiones fijadas a 250px para evitar scroll en pantallas de celular. |
+| **Botones de Exportación** | ✅ Aceptado | ⭐⭐⭐⭐⭐ | Botones con semántica y etiquetas inequívocas (Excel XLSX y PDF SENA). |
+| **Visibilidad de Contraseñas** | ✅ Aceptado | ⭐⭐⭐⭐⭐ | Toggles accesibles para verificar contraseñas antes de enviar peticiones. |

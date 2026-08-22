@@ -139,7 +139,13 @@ app.get('/attendance/:token', (req, res) => {
       </div>
       <div>
         <label class="input-label">Contraseña</label>
-        <input id="inp-pwd" type="password" placeholder="Ingresa tu contraseña" class="input-field" style="text-align:center;font-size:1.1rem">
+        <div style="position:relative;display:flex;align-items:center">
+          <input id="inp-pwd" type="password" placeholder="Ingresa tu contraseña" class="input-field" style="text-align:center;font-size:1.1rem;padding-right:2.8rem">
+          <button type="button" onclick="toggleStudentPwd('inp-pwd', 'eye-check-open', 'eye-check-closed')" style="position:absolute;right:.75rem;background:transparent;border:none;color:#94a3b8;cursor:pointer;display:flex;align-items:center;padding:.2rem" title="Ver/Ocultar contraseña">
+            <svg id="eye-check-open" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            <svg id="eye-check-closed" class="hidden" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
+          </button>
+        </div>
       </div>
 
       <button class="btn-green" id="btn-check" onclick="doCheck()">
@@ -185,7 +191,13 @@ app.get('/attendance/:token', (req, res) => {
       </div>
       <div>
         <label class="input-label">Crear Contraseña</label>
-        <input id="reg-pwd" type="password" placeholder="Mínimo 6 caracteres" class="input-field">
+        <div style="position:relative;display:flex;align-items:center">
+          <input id="reg-pwd" type="password" placeholder="Mínimo 6 caracteres" class="input-field" style="padding-right:2.8rem">
+          <button type="button" onclick="toggleStudentPwd('reg-pwd', 'eye-reg-open', 'eye-reg-closed')" style="position:absolute;right:.75rem;background:transparent;border:none;color:#94a3b8;cursor:pointer;display:flex;align-items:center;padding:.2rem" title="Ver/Ocultar contraseña">
+            <svg id="eye-reg-open" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            <svg id="eye-reg-closed" class="hidden" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
+          </button>
+        </div>
       </div>
 
       <!-- Enrolamiento Biométrico Facial (Selfie de Registro) -->
@@ -400,11 +412,11 @@ app.get('/attendance/:token', (req, res) => {
 
 <!-- Modal de Escáner QR de Cámara Trasera -->
 <div id="qr-scanner-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);align-items:center;justify-content:center;z-index:99999;padding:1.5rem">
-  <div style="background:#0f172a;border:1px solid rgba(57,169,0,.3);border-radius:1.5rem;width:100%;max-width:360px;padding:1.2rem;display:flex;flex-direction:column;gap:1rem;position:relative">
+  <div style="background:#0f172a;border:1px solid rgba(57,169,0,.3);border-radius:1.5rem;width:100%;max-width:340px;padding:1.2rem;display:flex;flex-direction:column;gap:1rem;position:relative">
     <button type="button" onclick="closeQrScannerModal()" style="position:absolute;top:1rem;right:1rem;background:transparent;border:none;color:#94a3b8;font-size:1.5rem;cursor:pointer;line-height:1">&times;</button>
     <h3 style="font-size:1rem;font-weight:800;color:#fff;margin:0">Escanear Código QR</h3>
     <p style="color:#64748b;font-size:.7rem;margin:0">Apunta con la cámara trasera al código QR de asistencia.</p>
-    <div id="qr-reader-container" style="width:100%;background:#020617;border-radius:1rem;overflow:hidden;border:1px solid rgba(255,255,255,.05)">
+    <div id="qr-reader-container" style="width:100%;max-width:250px;max-height:250px;margin:0 auto;background:#020617;border-radius:1rem;overflow:hidden;border:1px solid rgba(255,255,255,.05)">
       <div id="qr-reader" style="width:100%"></div>
     </div>
     <button type="button" onclick="closeQrScannerModal()" class="btn-ghost" style="margin:0">Cancelar</button>
@@ -415,6 +427,19 @@ app.get('/attendance/:token', (req, res) => {
   const TOKEN = '${token}';
   let activeToken = TOKEN;
   let html5QrScanner = null;
+
+  function toggleStudentPwd(inpId, openId, closedId) {
+    const inp = document.getElementById(inpId);
+    const open = document.getElementById(openId);
+    const closed = document.getElementById(closedId);
+    if (!inp) return;
+    const isPass = inp.type === 'password';
+    inp.type = isPass ? 'text' : 'password';
+    if (open && closed) {
+      open.classList.toggle('hidden', isPass);
+      closed.classList.toggle('hidden', !isPass);
+    }
+  }
 
   function openQrScannerModal() {
     stopAsisCamera();
