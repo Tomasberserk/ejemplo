@@ -1046,7 +1046,87 @@ app.get('/attendance/:token', (req, res) => {
     }
   }
 
-  // Registrar asistencia desde el portal del estudiante
+  // ── OFFLINE BUFFER QUEUE (localStorage) ──────────────────────────────────
+  function enqueueOfflineAttendance(token, data) {
+    try {
+      const key = 'sena_attendance_offline_queue';
+      const queue = JSON.parse(localStorage.getItem(key) || '[]');
+      queue.push({
+        id: 'off_' + Date.now(),
+        queuedAt: new Date().toISOString(),
+        token,
+        data
+      });
+      localStorage.setItem(key, JSON.stringify(queue));
+      updateOfflineQueueBanner();
+      return true;
+    } catch(e) {
+      console.error('Error queuing offline attendance:', e);
+      return false;
+    }
+  }
+
+  async function syncOfflineAttendanceQueue() {
+    if (!navigator.onLine) return;
+    const key = 'sena_attendance_offline_queue';
+    let queue = [];
+    try { queue = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return; }
+    if (queue.length === 0) {
+      updateOfflineQueueBanner();
+      return;
+    }
+
+    const remaining = [];
+    let syncedCount = 0;
+    for (const item of queue) {
+      try {
+        const res = await fetch('/public/attendance/' + (item.token || 'manual') + '/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': studentToken ? ('Bearer ' + studentToken) : ''
+          },
+          body: JSON.stringify(item.data)
+        });
+        if (res.ok) {
+          syncedCount++;
+        } else {
+          remaining.push(item);
+        }
+      } catch(err) {
+        remaining.push(item);
+        break;
+      }
+    }
+    localStorage.setItem(key, JSON.stringify(remaining));
+    updateOfflineQueueBanner();
+    if (syncedCount > 0) {
+      const fb = document.getElementById('feedback-dashboard');
+      if (fb) showFeedback(fb, '✅ ¡Sincronizado! Se procesaron ' + syncedCount + ' marcación(es) pendientes del buffer offline.', 'success');
+    }
+  }
+
+  function updateOfflineQueueBanner() {
+    const banner = document.getElementById('offline-queue-banner');
+    if (!banner) return;
+    try {
+      const queue = JSON.parse(localStorage.getItem('sena_attendance_offline_queue') || '[]');
+      if (queue.length > 0) {
+        banner.classList.remove('hidden');
+        const countEl = document.getElementById('offline-queue-count');
+        if (countEl) countEl.textContent = queue.length;
+      } else {
+        banner.classList.add('hidden');
+      }
+    } catch(e) {}
+  }
+
+  window.addEventListener('online', () => {
+    console.log('Conexión reestablecida. Sincronizando cola offline...');
+    syncOfflineAttendanceQueue();
+  });
+
+  // Registrar asistencia desde el portal del estudiante (con soporte Offline)
   async function doSubmitAttendance() {
     const tokenInput = document.getElementById('asis-token-input').value.trim() || TOKEN;
     const btnSubmit = document.getElementById('btn-submit-asis');
@@ -1075,6 +1155,28 @@ app.get('/attendance/:token', (req, res) => {
       photoEvidence = canvas.toDataURL('image/jpeg', 0.8);
     }
 
+    const payloadData = {
+      documento: studentProfile.documento,
+      photo_evidence: photoEvidence,
+      verification_method: lastVerificationMethod,
+      biometric_match_score: lastBiometricMatchScore
+    };
+
+    // Si el navegador no tiene conexión activa, guardar directamente en el buffer offline
+    if (!navigator.onLine) {
+      enqueueOfflineAttendance(tokenInput, payloadData);
+      showFeedback(fb, '📶 Sin conexión a internet. Tu marcación ha sido guardada en el dispositivo (Buffer Offline) y se sincronizará automáticamente al recuperar señal.', 'warning');
+      stopAsisCamera();
+      if (photoEvidence) {
+        const preview = document.getElementById('asis-photo-preview');
+        preview.src = photoEvidence;
+        preview.classList.remove('hidden');
+        video.classList.add('hidden');
+      }
+      setLoading('btn-submit-asis', 'btn-submit-asis-spin', 'btn-submit-asis-text', false, 'Registrar Mi Asistencia Ahora');
+      return;
+    }
+
     try {
       const res = await fetch('/public/attendance/' + tokenInput + '/register', {
         method: 'POST',
@@ -1082,12 +1184,7 @@ app.get('/attendance/:token', (req, res) => {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + studentToken
         },
-        body: JSON.stringify({
-          documento: studentProfile.documento,
-          photo_evidence: photoEvidence,
-          verification_method: lastVerificationMethod,
-          biometric_match_score: lastBiometricMatchScore
-        })
+        body: JSON.stringify(payloadData)
       });
       const result = await res.json();
 
@@ -1105,7 +1202,10 @@ app.get('/attendance/:token', (req, res) => {
         showFeedback(fb, '❌ ' + (result.error?.message || 'Error al registrar asistencia.'), 'error');
       }
     } catch (e) {
-      showFeedback(fb, '❌ Error de conexión al procesar la asistencia.', 'error');
+      // Fallback offline en caso de error de red o timeout
+      enqueueOfflineAttendance(tokenInput, payloadData);
+      showFeedback(fb, '📶 Fallo de red temporal. Tu asistencia se guardó localmente en el Buffer Offline y se reintentará al recuperar conexión.', 'warning');
+      stopAsisCamera();
     } finally {
       setLoading('btn-submit-asis', 'btn-submit-asis-spin', 'btn-submit-asis-text', false, 'Registrar Mi Asistencia Ahora');
     }

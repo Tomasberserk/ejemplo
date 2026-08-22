@@ -1,12 +1,13 @@
 {
-  "name": "app-attendance-root",
+  "name": "sena-attendance-system",
   "version": "1.0.0",
-  "description": "Root workspace package.json for attendance system",
+  "description": "Sistema de Control de Asistencia SENA - Monolito Modular Ligero",
   "type": "module",
   "scripts": {
     "start": "npm --prefix back start",
     "dev": "npm --prefix back run dev",
-    "install:all": "npm --prefix back install"
+    "install:all": "npm --prefix back install",
+    "test": "node backend/tests/run-all.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
