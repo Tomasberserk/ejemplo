@@ -249,6 +249,21 @@ document.addEventListener('DOMContentLoaded', () => {
   instructorForm.addEventListener('submit', handleInstructorSubmit);
   fichaForm.addEventListener('submit', handleFichaSubmit);
 
+  // Toggle Login Password Visibility
+  const btnToggleLoginPassword = document.getElementById('btnToggleLoginPassword');
+  if (btnToggleLoginPassword) {
+    btnToggleLoginPassword.addEventListener('click', () => {
+      const isPass = loginPassword.getAttribute('type') === 'password';
+      loginPassword.setAttribute('type', isPass ? 'text' : 'password');
+      const eyeOpen = document.getElementById('eyeIconOpen');
+      const eyeClosed = document.getElementById('eyeIconClosed');
+      if (eyeOpen && eyeClosed) {
+        eyeOpen.classList.toggle('hidden', isPass);
+        eyeClosed.classList.toggle('hidden', !isPass);
+      }
+    });
+  }
+
   if (state.token && state.person) {
     showDashboard();
   } else {
