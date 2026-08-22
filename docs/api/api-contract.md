@@ -46,16 +46,37 @@ Valida credenciales de instructores, coordinadores y estudiantes.
         "institutionId": "inst_sena_1",
         "nombre": "Instructor SENA",
         "documento": "1079606375",
-        "roles": ["INSTRUCTOR"]
+        "roles": ["INSTRUCTOR"],
+        "must_change_password": false
       }
     }
   }
   ```
 
-### B. Salud del Servidor (`GET /health`)
+### B. Cambio de Contraseña (`POST /api/auth/change-password`)
+Permite al usuario autenticado actualizar su contraseña (obligatorio cuando `must_change_password` es `true`).
+* **Headers:** `Authorization: Bearer <token>`
+* **Cuerpo de Petición:**
+  ```json
+  {
+    "currentPassword": "password_actual",
+    "newPassword": "nueva_password_segura"
+  }
+  ```
+* **Respuesta de Éxito (`200 OK`):**
+  ```json
+  {
+    "data": {
+      "message": "Contraseña actualizada exitosamente.",
+      "must_change_password": false
+    }
+  }
+  ```
+
+### C. Salud del Servidor (`GET /health`)
 Verifica que el servidor Express está activo. Responde con texto plano `'ok'`.
 
-### C. Conexión de Persistencia (`GET /ready`)
+### D. Conexión de Persistencia (`GET /ready`)
 Verifica la conexión saludable con la base de datos relacional (SQLite o PostgreSQL). Responde con texto plano `'ready'`.
 
 ---

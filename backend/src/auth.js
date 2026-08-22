@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { get } from './db.js';
+import { get, run } from './db.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-for-dev-only';
 
@@ -56,7 +56,8 @@ export const login = async (req, res) => {
           institutionId: person.institution_id,
           nombre: person.nombre,
           documento: person.documento,
-          roles
+          roles,
+          must_change_password: person.must_change_password === 1
         }
       }
     });
@@ -125,7 +126,8 @@ export const studentLogin = async (req, res) => {
           nombre: person.nombre,
           documento: person.documento,
           photo_reference: person.photo_reference || '',
-          terms_accepted: person.terms_accepted || 0
+          terms_accepted: person.terms_accepted || 0,
+          must_change_password: person.must_change_password === 1
         }
       }
     });
@@ -133,6 +135,65 @@ export const studentLogin = async (req, res) => {
     console.error('Student login error:', err);
     return res.status(500).json({
       error: { code: 'SERVER_ERROR', message: 'Error interno en el inicio de sesión.' }
+    });
+  }
+};
+
+// Change Password Endpoint (Mandatory first-time or user request)
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user?.id;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'La contraseña actual y la nueva contraseña son requeridas.' }
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'La nueva contraseña debe tener al menos 6 caracteres.' }
+      });
+    }
+
+    const person = await get('SELECT * FROM people WHERE id = ?', [userId]);
+    if (!person) {
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Usuario no encontrado.' }
+      });
+    }
+
+    // Verify current password
+    let isMatch = false;
+    if (person.password.startsWith('$2b$') || person.password.startsWith('$2a$')) {
+      isMatch = await bcrypt.compare(currentPassword, person.password);
+    } else {
+      isMatch = (currentPassword === person.password);
+    }
+
+    if (!isMatch) {
+      return res.status(401).json({
+        error: { code: 'INVALID_CREDENTIALS', message: 'La contraseña actual es incorrecta.' }
+      });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'La nueva contraseña no puede ser idéntica a la anterior.' }
+      });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await run('UPDATE people SET password = ?, must_change_password = 0 WHERE id = ?', [hashed, userId]);
+
+    return res.status(200).json({
+      data: { message: 'Contraseña actualizada exitosamente.', must_change_password: false }
+    });
+  } catch (err) {
+    console.error('Change password error:', err);
+    return res.status(500).json({
+      error: { code: 'SERVER_ERROR', message: 'Error interno al cambiar la contraseña.' }
     });
   }
 };

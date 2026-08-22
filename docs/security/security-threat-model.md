@@ -31,15 +31,22 @@ Este documento detalla el análisis de riesgos, amenazas identificadas y las mit
 * **Riesgo:** Estudiantes realizan peticiones HTTP directas para alterar asistencias o crear fichas.
 * **Mitigación:** El middleware `authenticate` verifica la cabecera `Authorization: Bearer <JWT>` en todas las rutas bajo `/api/*`. Si el token expira (24 horas) o es alterado, Express deniega el acceso (`401 Unauthorized`). Las rutas del coordinador validan explícitamente el rol del JWT usando `requireRole('COORDINADOR')`.
 
-### D. Exposición de Credenciales
-* **Riesgo:** Fuga de contraseñas de la base de datos o en respuestas de red JSON.
-* **Mitigación:** Las contraseñas de producción se hashean con Bcrypt (`bcryptjs` con costo 10). Al consultar personas en el backend, las contraseñas se filtran y nunca se devuelven en la serialización JSON del endpoint `/api/auth/login`.
+### D. Exposición de Credenciales y Contraseñas por Defecto
+* **Riesgo:** Fuga de contraseñas de la base de datos o abuso de usuarios inicializados con su número de documento como contraseña.
+* **Mitigación:** 
+  - Las contraseñas de producción se hashean con Bcrypt (`bcryptjs` con factor de coste 10).
+  - Se implementó la bandera `must_change_password` y el endpoint `POST /api/auth/change-password` para obligar al usuario a crear una contraseña segura y personalizada en su primer inicio de sesión.
+  - Al consultar personas en el backend, los hashes de contraseña se excluyen de todas las respuestas JSON públicas y privadas.
+
+### E. Inyección de Código / XSS en Entradas Públicas
+* **Riesgo:** Inserción de etiquetas HTML/scripts en nombres de aprendices, justificaciones o descripciones de excusas.
+* **Mitigación:** Se implementaron las funciones sanitizadoras `sanitizeText()` y `sanitizeDocument()` en el backend, eliminando caracteres especiales (`<`, `>`), acotando la longitud máxima y validando formatos antes de cualquier inserción en la base de datos.
 
 ---
 
-## 3. Pendientes de Seguridad Antes de Producción
+## 3. Pendientes y Recomendaciones de Seguridad para Producción
 
-1. **Migración Completa a Bcrypt:** Hashear el 100% de las contraseñas cargadas por defecto en desarrollo que actualmente están en texto plano.
-2. **Robustecer `JWT_SECRET`:** Asegurar que en el archivo `.env` de producción se configure una clave secreta larga de al menos 32 caracteres.
-3. **Restringir CORS:** Cambiar la configuración de CORS comodín `*` en `server.js` por el dominio específico del frontend en producción.
-4. **Implementar Rate Limiting:** Limitar la cantidad de peticiones concurrentes en `/api/auth/login` para mitigar ataques de fuerza bruta.
+1. **Robustecer `JWT_SECRET`:** Asegurar que en el archivo `.env` de producción se configure una clave secreta criptográfica de al menos 32 caracteres.
+2. **Restringir CORS:** Reemplazar el comodín `*` en `backend/src/server.js` por el dominio específico del frontend en producción.
+3. **Implementar Rate Limiting:** Limitar la tasa de peticiones en `/api/auth/login` y `/public/student/login` para mitigar ataques de fuerza bruta.
+4. **Almacenamiento Seguro de Evidencias:** Para entornos de alta concurrencia, migrar las imágenes Base64 a un bucket S3 o Cloudinary con URLs firmadas y tiempo de vida limitado.

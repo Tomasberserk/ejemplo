@@ -145,6 +145,7 @@ export async function initDb() {
       roles TEXT,
       photo_reference TEXT,
       terms_accepted INTEGER DEFAULT 0,
+      must_change_password INTEGER DEFAULT 0,
       FOREIGN KEY(institution_id) REFERENCES institutions(id),
       UNIQUE(institution_id, documento)
     )
@@ -324,9 +325,12 @@ export async function initDb() {
         await run(`ALTER TABLE people ADD COLUMN photo_reference TEXT`);
       } catch (e) { if (e.code !== '42701') throw e; }
 
-      // terms_accepted
+      // terms_accepted & must_change_password
       try {
         await run(`ALTER TABLE people ADD COLUMN terms_accepted INTEGER DEFAULT 0`);
+      } catch (e) { if (e.code !== '42701') throw e; }
+      try {
+        await run(`ALTER TABLE people ADD COLUMN must_change_password INTEGER DEFAULT 0`);
       } catch (e) { if (e.code !== '42701') throw e; }
 
       // 2. Add photo_evidence, biometric_match_score, verification_method to attendance_records
@@ -354,6 +358,9 @@ export async function initDb() {
       }
       if (!peopleCols.some(col => col.name === 'terms_accepted')) {
         await run(`ALTER TABLE people ADD COLUMN terms_accepted INTEGER DEFAULT 0`);
+      }
+      if (!peopleCols.some(col => col.name === 'must_change_password')) {
+        await run(`ALTER TABLE people ADD COLUMN must_change_password INTEGER DEFAULT 0`);
       }
 
       const recCols = await query(`PRAGMA table_info(attendance_records)`);

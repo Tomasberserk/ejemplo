@@ -5,6 +5,21 @@ import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-for-dev-only';
 
+// Helper to sanitize text and prevent script injection
+export const sanitizeText = (str, maxLength = 255) => {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .replace(/[<>]/g, '')
+    .trim()
+    .substring(0, maxLength);
+};
+
+// Helper to sanitize document identifiers
+export const sanitizeDocument = (doc) => {
+  if (!doc) return '';
+  return String(doc).trim().replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 30);
+};
+
 // Helper to get client IP
 const getClientIp = (req) => {
   const xForwardedFor = req.headers['x-forwarded-for'];
@@ -296,7 +311,29 @@ export const getSessionQrToken = async (req, res) => {
 
 export const getSessionsHistory = async (req, res) => {
   try {
-    const rows = await query('SELECT * FROM attendance_sessions ORDER BY room_created_at DESC LIMIT 50');
+    const { unit_id, status, startDate, endDate } = req.query || {};
+    let sql = 'SELECT * FROM attendance_sessions WHERE 1=1';
+    const params = [];
+
+    if (unit_id) {
+      sql += ' AND unit_id = ?';
+      params.push(sanitizeText(unit_id, 50));
+    }
+    if (status) {
+      sql += ' AND status = ?';
+      params.push(sanitizeText(status, 20));
+    }
+    if (startDate) {
+      sql += ' AND room_created_at >= ?';
+      params.push(sanitizeText(startDate, 40));
+    }
+    if (endDate) {
+      sql += ' AND room_created_at <= ?';
+      params.push(sanitizeText(endDate, 40));
+    }
+
+    sql += ' ORDER BY room_created_at DESC LIMIT 100';
+    const rows = await query(sql, params);
     res.json({ data: rows });
   } catch (err) {
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });
@@ -309,8 +346,9 @@ export const checkDocument = async (req, res) => {
     const { documento } = req.body;
     const { token } = req.params;
 
-    if (!documento || !token) {
-      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento y token QR son requeridos.' } });
+    const cleanDoc = sanitizeDocument(documento);
+    if (!cleanDoc || !token) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento válido y token QR son requeridos.' } });
     }
 
     // Find session
@@ -338,11 +376,11 @@ export const checkDocument = async (req, res) => {
     }
 
     // Check person
-    const person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [documento]);
+    const person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [cleanDoc]);
     return res.json({
       data: {
         exists: !!person,
-        documento
+        documento: cleanDoc
       }
     });
   } catch (err) {
@@ -356,8 +394,9 @@ export const checkin = async (req, res) => {
     const { documento, qrToken, sessionId: bodySessionId } = req.body;
     const pathToken = req.params.token; // From GET/POST /public/attendance/:token/register
     const token = qrToken || pathToken;
+    const cleanDoc = sanitizeDocument(documento);
 
-    if (!documento || !token) {
+    if (!cleanDoc || !token) {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento y token de QR son requeridos.' } });
     }
 
@@ -398,14 +437,14 @@ export const checkin = async (req, res) => {
     }
 
     // Find person
-    const person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [documento]);
+    const person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [cleanDoc]);
     if (!person) {
       // Record rejected attempt in DB
       await run(`
         INSERT INTO attendance_records (
           id, session_id, institution_id, unit_id, documento, status, reject_reason, message, created_at, client_ip
         ) VALUES (?, ?, ?, ?, ?, 'rejected', 'PERSON_NOT_FOUND', ?, ?, ?)
-      `, [`rec_${Date.now()}`, session.id, session.institution_id, session.unit_id, documento, 'Persona no encontrada en el sistema.', now.toISOString(), getClientIp(req)]);
+      `, [`rec_${Date.now()}`, session.id, session.institution_id, session.unit_id, cleanDoc, 'Persona no encontrada en el sistema.', now.toISOString(), getClientIp(req)]);
 
       return res.status(404).json({ error: { code: 'PERSON_NOT_FOUND', message: 'El aprendiz no está registrado.' } });
     }
@@ -417,7 +456,7 @@ export const checkin = async (req, res) => {
         INSERT INTO attendance_records (
           id, session_id, institution_id, unit_id, person_id, documento, status, reject_reason, message, created_at, client_ip
         ) VALUES (?, ?, ?, ?, ?, ?, 'rejected', 'NOT_ENROLLED', ?, ?, ?)
-      `, [`rec_${Date.now()}`, session.id, session.institution_id, session.unit_id, person.id, documento, 'Aprendiz no está inscrito en esta ficha.', now.toISOString(), getClientIp(req)]);
+      `, [`rec_${Date.now()}`, session.id, session.institution_id, session.unit_id, person.id, cleanDoc, 'Aprendiz no está inscrito en esta ficha.', now.toISOString(), getClientIp(req)]);
 
       return res.status(400).json({ error: { code: 'NOT_ENROLLED', message: 'El aprendiz no pertenece a esta ficha.' } });
     }
@@ -846,8 +885,11 @@ export const submitExcuse = async (req, res) => {
     const studentId = req.user.id;
     const { sessionId, text, fileName, fileData } = req.body;
 
-    if (!sessionId || !text) {
-      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'sessionId y texto son obligatorios.' } });
+    const cleanText = sanitizeText(text, 1000);
+    const cleanFileName = sanitizeText(fileName, 150);
+
+    if (!sessionId || !cleanText) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'sessionId y texto de justificación son obligatorios.' } });
     }
 
     // Verify session exists
@@ -868,7 +910,7 @@ export const submitExcuse = async (req, res) => {
     await run(`
       INSERT INTO excuses (id, session_id, person_id, text, file_name, file_data, status, created_at)
       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
-    `, [excuseId, sessionId, studentId, text, fileName || null, fileData || null, now.toISOString()]);
+    `, [excuseId, sessionId, studentId, cleanText, cleanFileName || null, fileData || null, now.toISOString()]);
 
     const created = await get('SELECT * FROM excuses WHERE id = ?', [excuseId]);
     res.status(201).json({ data: created, message: 'Excusa enviada al instructor correctamente.' });
@@ -963,8 +1005,11 @@ export const selfRegisterCheckin = async (req, res) => {
     const { token } = req.params;
     const { documento, nombre, password, photo_reference } = req.body;
 
-    if (!documento || !nombre) {
-      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento y nombre son requeridos.' } });
+    const cleanDoc = sanitizeDocument(documento);
+    const cleanNombre = sanitizeText(nombre, 100);
+
+    if (!cleanDoc || !cleanNombre) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento válido y nombre son requeridos.' } });
     }
 
     // Find session by token (with 10-minute leeway = 10 blocks of 60s)
@@ -989,17 +1034,17 @@ export const selfRegisterCheckin = async (req, res) => {
     }
 
     // Create or find person
-    let person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [documento]);
+    let person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [cleanDoc]);
     let isNewStudent = false;
 
     if (!person) {
       isNewStudent = true;
       const personId = `per_${Date.now()}`;
-      const hashedPwd = await bcrypt.hash(password || documento, 10);
+      const hashedPwd = await bcrypt.hash(password || cleanDoc, 10);
       await run(`
         INSERT INTO people (id, institution_id, documento, nombre, matricula, active, password, roles, photo_reference, terms_accepted)
         VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, 1)
-      `, [personId, session.institution_id, documento, nombre, `MAT-${documento}`, hashedPwd, JSON.stringify(['APRENDIZ']), photo_reference]);
+      `, [personId, session.institution_id, cleanDoc, cleanNombre, `MAT-${cleanDoc}`, hashedPwd, JSON.stringify(['APRENDIZ']), photo_reference]);
 
       await run(`
         INSERT INTO enrollments (id, institution_id, unit_id, person_id, active)
@@ -1124,8 +1169,12 @@ export const submitLateRequest = async (req, res) => {
     const { token } = req.params;
     const { documento, nombre, justification } = req.body;
 
-    if (!documento || !nombre) {
-      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento y nombre son requeridos.' } });
+    const cleanDoc = sanitizeDocument(documento);
+    const cleanNombre = sanitizeText(nombre, 100);
+    const cleanJustif = sanitizeText(justification, 500);
+
+    if (!cleanDoc || !cleanNombre) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Documento válido y nombre son requeridos.' } });
     }
 
     // Find session by token (wider window: up to 2 hours back for expired sessions)
@@ -1149,7 +1198,7 @@ export const submitLateRequest = async (req, res) => {
     await run(`
       INSERT INTO late_requests (id, session_id, institution_id, unit_id, documento, nombre, justification, status, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-    `, [requestId, session.id, session.institution_id, session.unit_id, documento, nombre, justification || '', now.toISOString()]);
+    `, [requestId, session.id, session.institution_id, session.unit_id, cleanDoc, cleanNombre, cleanJustif, now.toISOString()]);
 
     return res.status(201).json({
       data: { id: requestId, message: 'Solicitud enviada al instructor. Te notificarán cuando sea aprobada.' }

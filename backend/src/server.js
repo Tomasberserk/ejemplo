@@ -2,7 +2,7 @@ process.env.TZ = 'America/Bogota';
 import express from 'express';
 import cors from 'cors';
 import { initDb } from './db.js';
-import { login, studentLogin, authenticate, requireRole } from './auth.js';
+import { login, studentLogin, authenticate, requireRole, changePassword } from './auth.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {
@@ -65,6 +65,7 @@ app.get('/ready',  (req, res) => res.status(200).send('ready'));
 // ── Public Auth ───────────────────────────────────────────────────────────────
 app.post('/api/auth/login', login);
 app.post('/public/student/login', studentLogin);
+app.post('/api/auth/change-password', authenticate, changePassword);
 
 // ── Public Check-in endpoints ─────────────────────────────────────────────────
 app.post('/attendance/checkin',                      checkin);
