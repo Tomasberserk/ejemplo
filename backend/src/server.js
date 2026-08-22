@@ -424,6 +424,40 @@ app.get('/attendance/:token', (req, res) => {
   </div>
 </div>
 
+<!-- Modal para Subir Excusa / Incapacidad Médica -->
+<div id="excuse-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);align-items:center;justify-content:center;z-index:99999;padding:1.5rem">
+  <div style="background:#0f172a;border:1px solid rgba(57,169,0,.3);border-radius:1.5rem;width:100%;max-width:380px;padding:1.5rem;display:flex;flex-direction:column;gap:1rem;position:relative">
+    <button type="button" onclick="closeExcuseModal()" style="position:absolute;top:1rem;right:1rem;background:transparent;border:none;color:#94a3b8;font-size:1.5rem;cursor:pointer;line-height:1">&times;</button>
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <span style="font-size:1.5rem">📄</span>
+      <div>
+        <h3 style="font-size:1rem;font-weight:800;color:#fff;margin:0">Radicar Excusa o Incapacidad</h3>
+        <p style="color:#64748b;font-size:.7rem;margin:0">Envía tu justificación al instructor para validación.</p>
+      </div>
+    </div>
+    <div id="feedback-excuse" class="hidden mb-2"></div>
+    <input type="hidden" id="excuse-session-id">
+    
+    <div>
+      <label class="input-label">Motivo o Justificación</label>
+      <textarea id="excuse-text" rows="3" class="input-field" placeholder="Describe el motivo de tu inasistencia o retardo..." style="resize:none;font-size:.8rem"></textarea>
+    </div>
+
+    <div>
+      <label class="input-label">Soporte o Evidencia (PDF o Imagen Opcional)</label>
+      <input type="file" id="excuse-file" accept="image/*,application/pdf" class="input-field" style="font-size:.75rem;padding:.4rem" onchange="handleExcuseFile(event)">
+      <input type="hidden" id="excuse-file-data">
+      <input type="hidden" id="excuse-file-name">
+    </div>
+
+    <button type="button" id="btn-submit-excuse" onclick="doSubmitExcuse()" class="btn-green">
+      <span id="btn-excuse-text">Enviar Excusa al Instructor</span>
+      <svg id="btn-excuse-spin" class="hidden spin" width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="white" stroke-width="4" opacity=".25"/><path fill="white" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/></svg>
+    </button>
+    <button type="button" onclick="closeExcuseModal()" class="btn-ghost" style="margin:0">Cancelar</button>
+  </div>
+</div>
+
 <script>
   const TOKEN = '${token}';
   let activeToken = TOKEN;
@@ -1190,7 +1224,7 @@ app.get('/attendance/:token', (req, res) => {
           } else if (isExpired) {
             excuseCol = '<span style="color:#475569;font-weight:600">Vencido (excedió 3 días)</span>';
           } else {
-            excuseCol = '<button onclick="openExcuseModal(\\\'' + h.sessionId + '\\\')" style="background:#1e3a8a;color:#93c5fd;font-size:.6rem;padding:.3rem .5rem;border:none;border-radius:.4rem;cursor:pointer;font-weight:600">Subir Excusa</button>';
+            excuseCol = '<button onclick="openExcuseModal(\'' + h.sessionId + '\')" style="background:#1e3a8a;color:#93c5fd;font-size:.6rem;padding:.3rem .5rem;border:none;border-radius:.4rem;cursor:pointer;font-weight:600">Subir Excusa</button>';
           }
 
           container.innerHTML += '<tr style="border-bottom:1px solid rgba(255,255,255,.03)">' +
@@ -1209,6 +1243,74 @@ app.get('/attendance/:token', (req, res) => {
       }
     } catch (e) {
       container.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:1rem;color:#f87171">Error de conexión.</td></tr>';
+    }
+  }
+
+  function openExcuseModal(sessionId) {
+    document.getElementById('excuse-session-id').value = sessionId || '';
+    document.getElementById('excuse-text').value = '';
+    document.getElementById('excuse-file').value = '';
+    document.getElementById('excuse-file-data').value = '';
+    document.getElementById('excuse-file-name').value = '';
+    document.getElementById('feedback-excuse').className = 'hidden mb-2';
+    document.getElementById('excuse-modal').style.display = 'flex';
+  }
+
+  function closeExcuseModal() {
+    document.getElementById('excuse-modal').style.display = 'none';
+  }
+
+  function handleExcuseFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    document.getElementById('excuse-file-name').value = file.name;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      document.getElementById('excuse-file-data').value = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function doSubmitExcuse() {
+    const sessionId = document.getElementById('excuse-session-id').value;
+    const text = document.getElementById('excuse-text').value.trim();
+    const fileName = document.getElementById('excuse-file-name').value;
+    const fileData = document.getElementById('excuse-file-data').value;
+    const fb = document.getElementById('feedback-excuse');
+
+    if (!sessionId) {
+      showFeedback(fb, '❌ No se especificó la sesión a justificar.', 'error');
+      return;
+    }
+    if (!text) {
+      showFeedback(fb, '❌ Por favor ingresa el motivo o justificación.', 'error');
+      return;
+    }
+
+    setLoading('btn-submit-excuse','btn-excuse-spin','btn-excuse-text', true, 'Enviando...');
+    fb.className = 'hidden mb-2';
+
+    try {
+      const res = await fetch('/api/excuses/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + studentToken
+        },
+        body: JSON.stringify({ sessionId, text, fileName, fileData })
+      });
+      const result = await res.json();
+      if (res.ok) {
+        alert('¡Excusa enviada al instructor correctamente!');
+        closeExcuseModal();
+        fetchStudentHistory();
+      } else {
+        showFeedback(fb, '❌ ' + (result.error?.message || 'Error al enviar excusa.'), 'error');
+      }
+    } catch(err) {
+      showFeedback(fb, '❌ Error de conexión con el servidor.', 'error');
+    } finally {
+      setLoading('btn-submit-excuse','btn-excuse-spin','btn-excuse-text', false, 'Enviar Excusa al Instructor');
     }
   }
 
@@ -1288,6 +1390,7 @@ app.get('/reports/session/:sessionId',                 authenticate, getSessionR
 // Student Portal
 app.get('/api/student/history',                        authenticate, getStudentHistory);
 app.post('/api/student/excuses',                       authenticate, submitExcuse);
+app.post('/api/excuses/submit',                        authenticate, submitExcuse);
 app.delete('/api/student/delete-account',              authenticate, deleteStudentAccount);
 app.post('/api/student/accept-terms',                  authenticate, acceptStudentTerms);
 

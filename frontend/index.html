@@ -326,6 +326,11 @@
                   <span>Cerrar Sala Manualmente</span>
                 </button>
 
+                <!-- Manual Checkin / Apprentice without smartphone button -->
+                <button id="btnOpenManualCheckinModal" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 border border-slate-700">
+                  <span>➕ Marcación Manual (Sin Móvil)</span>
+                </button>
+
                 <!-- New Room Button (Shown only when session is closed or expired) -->
                 <button id="btnNewRoom" class="hidden w-full bg-[#39A900] hover:bg-[#329200] text-white font-semibold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
                   <span>Abrir Nueva Sala / Ficha</span>
@@ -893,6 +898,36 @@
             </button>
             <button type="submit" class="flex-1 bg-[#39A900] hover:bg-[#329200] text-white py-2 rounded-xl text-sm font-semibold transition-all">
               Enviar Excusa
+            </button>
+          </div>
+        </form>
+      </div>
+    <!-- MODAL MARCACIÓN MANUAL DE APRENDIZ (Sin dispositivo) -->
+    <div id="manualCheckinModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div class="glass w-full max-w-md rounded-3xl p-6 shadow-2xl border border-slate-800 relative">
+        <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+          <div>
+            <h3 class="text-base font-bold text-white">Marcación Manual de Aprendiz</h3>
+            <p class="text-xs text-slate-400">Registrar aprendiz que no tiene móvil o presentó fallas</p>
+          </div>
+          <button id="btnCancelManualCheckin" type="button" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+        </div>
+
+        <div id="feedbackManualCheckin" class="hidden mb-3 p-3 rounded-xl text-xs font-semibold text-center"></div>
+
+        <form id="formManualCheckin" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Documento de Identidad</label>
+            <input type="text" id="manualDoc" required placeholder="Ej: 1079606375" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#39A900]">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Nombre Completo (Opcional si ya está registrado)</label>
+            <input type="text" id="manualNombre" placeholder="Ej: Carlos Gómez" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#39A900]">
+          </div>
+          <div class="flex gap-3 pt-2">
+            <button type="button" id="btnCancelManualCheckin2" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 rounded-xl text-xs transition-all">Cancelar</button>
+            <button type="submit" id="btnSubmitManualCheckin" class="flex-1 bg-[#39A900] hover:bg-[#329200] text-white font-semibold py-2.5 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5">
+              <span>Marcar Presente</span>
             </button>
           </div>
         </form>

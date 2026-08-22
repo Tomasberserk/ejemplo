@@ -53,18 +53,18 @@ export const matchToken = (inputToken, actualToken) => {
 const checkSameSubnetOrIp = (ip1, ip2) => {
   if (!ip1 || !ip2) return false;
   
-  // Local dev bypass
-  const localips = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
-  if (localips.includes(ip1) || localips.includes(ip2)) {
-    return true;
-  }
-  
-  const norm1 = ip1.replace('::ffff:', '');
-  const norm2 = ip2.replace('::ffff:', '');
+  const norm1 = ip1.replace('::ffff:', '').trim();
+  const norm2 = ip2.replace('::ffff:', '').trim();
   
   if (norm1 === norm2) return true;
   
-  // Subnet /24 check
+  // Both are loopback/local
+  const localips = ['127.0.0.1', '::1', 'localhost'];
+  if (localips.includes(norm1) && localips.includes(norm2)) {
+    return true;
+  }
+  
+  // Subnet /24 check (e.g. 192.168.1.X)
   const parts1 = norm1.split('.');
   const parts2 = norm2.split('.');
   if (parts1.length === 4 && parts2.length === 4) {
@@ -578,12 +578,14 @@ export const checkin = async (req, res) => {
   }
 };
 
-// Manual override by Teacher
+// Manual override by Teacher (with auto-enrollment support for students without devices)
 export const manualOverride = async (req, res) => {
   try {
-    const { sessionId, documento, horas_validadas_asistencia = 6, horas_inasistencia_acumulada = 0, tipo_registro = 'MANUAL_OVERRIDE' } = req.body;
-    if (!sessionId || !documento) {
-      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'sessionId y documento son requeridos.' } });
+    const { sessionId, documento, nombre, horas_validadas_asistencia = 6, horas_inasistencia_acumulada = 0, tipo_registro = 'MANUAL_OVERRIDE' } = req.body;
+    const cleanDoc = sanitizeDocument(documento);
+    
+    if (!sessionId || !cleanDoc) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'sessionId y documento válido son requeridos.' } });
     }
 
     const session = await get('SELECT * FROM attendance_sessions WHERE id = ?', [sessionId]);
@@ -591,9 +593,26 @@ export const manualOverride = async (req, res) => {
       return res.status(404).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Sesión no encontrada.' } });
     }
 
-    const person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [documento]);
+    let person = await get('SELECT * FROM people WHERE documento = ? AND active = 1', [cleanDoc]);
     if (!person) {
-      return res.status(404).json({ error: { code: 'PERSON_NOT_FOUND', message: 'Persona no encontrada.' } });
+      if (nombre) {
+        const cleanNombre = sanitizeText(nombre, 100);
+        const personId = `per_${Date.now()}`;
+        const hashedPwd = await bcrypt.hash(cleanDoc, 10);
+        await run(`
+          INSERT INTO people (id, institution_id, documento, nombre, matricula, active, password, roles, terms_accepted, must_change_password)
+          VALUES (?, ?, ?, ?, ?, 1, ?, ?, 1, 1)
+        `, [personId, session.institution_id, cleanDoc, cleanNombre, `MAT-${cleanDoc}`, hashedPwd, JSON.stringify(['APRENDIZ'])]);
+
+        await run(`
+          INSERT INTO enrollments (id, institution_id, unit_id, person_id, active)
+          VALUES (?, ?, ?, ?, 1)
+        `, [`enr_${Date.now()}`, session.institution_id, session.unit_id, personId]);
+
+        person = await get('SELECT * FROM people WHERE id = ?', [personId]);
+      } else {
+        return res.status(404).json({ error: { code: 'PERSON_NOT_FOUND', message: 'Aprendiz no registrado. Ingrese el nombre para enrolarlo manualmente.' } });
+      }
     }
 
     const now = new Date();
@@ -614,7 +633,7 @@ export const manualOverride = async (req, res) => {
       `, [horas_validadas_asistencia, horas_inasistencia_acumulada, tipo_registro, existing.id]);
       
       const updated = await get('SELECT * FROM attendance_records WHERE id = ?', [existing.id]);
-      return res.json({ data: updated, message: 'Registro actualizado por corrección manual.' });
+      return res.json({ data: updated, message: 'Registro actualizado por corrección manual del instructor.' });
     } else {
       const horaIngreso = now.toTimeString().split(' ')[0];
       await run(`
@@ -622,14 +641,14 @@ export const manualOverride = async (req, res) => {
           id, session_id, institution_id, unit_id, person_id, documento, status, message,
           hora_ingreso_real, horas_programadas_sesion, horas_validadas_asistencia, horas_inasistencia_acumulada,
           tipo_registro, created_at, client_ip
-        ) VALUES (?, ?, ?, ?, ?, ?, 'PRESENTE', 'Ingreso manual justificado por el instructor.', ?, 6, ?, ?, ?, ?, 'override')
+        ) VALUES (?, ?, ?, ?, ?, ?, 'PRESENTE', 'Ingreso manual por falta de dispositivo / contingencia.', ?, 6, ?, ?, ?, ?, 'instructor_override')
       `, [
-        recId, sessionId, session.institution_id, session.unit_id, person.id, documento,
+        recId, sessionId, session.institution_id, session.unit_id, person.id, cleanDoc,
         horaIngreso, horas_validadas_asistencia, horas_inasistencia_acumulada, tipo_registro, now.toISOString()
       ]);
       
       const saved = await get('SELECT * FROM attendance_records WHERE id = ?', [recId]);
-      return res.json({ data: saved, message: 'Ingreso manual registrado.' });
+      return res.json({ data: saved, message: 'Ingreso manual y asistencia registrada exitosamente.' });
     }
   } catch (err) {
     res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message } });

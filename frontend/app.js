@@ -588,6 +588,74 @@ btnCloseSession.addEventListener('click', async () => {
   }
 });
 
+// Manual Check-in Modal for Students without Device
+const btnOpenManualCheckinModal = document.getElementById('btnOpenManualCheckinModal');
+const manualCheckinModal = document.getElementById('manualCheckinModal');
+const btnCancelManualCheckin = document.getElementById('btnCancelManualCheckin');
+const btnCancelManualCheckin2 = document.getElementById('btnCancelManualCheckin2');
+const formManualCheckin = document.getElementById('formManualCheckin');
+const feedbackManualCheckin = document.getElementById('feedbackManualCheckin');
+const manualDoc = document.getElementById('manualDoc');
+const manualNombre = document.getElementById('manualNombre');
+
+if (btnOpenManualCheckinModal) {
+  btnOpenManualCheckinModal.addEventListener('click', () => {
+    if (!state.activeSession) {
+      alert('Debe tener una sala de clase activa para registrar asistencias.');
+      return;
+    }
+    feedbackManualCheckin.className = 'hidden mb-3 p-3 rounded-xl text-xs font-semibold text-center';
+    manualDoc.value = '';
+    manualNombre.value = '';
+    manualCheckinModal.classList.remove('hidden');
+  });
+}
+
+if (btnCancelManualCheckin) btnCancelManualCheckin.addEventListener('click', () => manualCheckinModal.classList.add('hidden'));
+if (btnCancelManualCheckin2) btnCancelManualCheckin2.addEventListener('click', () => manualCheckinModal.classList.add('hidden'));
+
+if (formManualCheckin) {
+  formManualCheckin.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!state.activeSession) return;
+    
+    const doc = manualDoc.value.trim();
+    const nom = manualNombre.value.trim();
+    if (!doc) return;
+
+    try {
+      const res = await fetch(`${state.apiUrl}/attendance/manual-override`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${state.token}`
+        },
+        body: JSON.stringify({
+          sessionId: state.activeSession.id,
+          documento: doc,
+          nombre: nom,
+          horas_validadas_asistencia: 6,
+          horas_inasistencia_acumulada: 0,
+          tipo_registro: 'MANUAL_INSTRUCTOR'
+        })
+      });
+
+      const result = await res.json();
+      if (res.ok) {
+        alert('¡Asistencia registrada manualmente con éxito!');
+        manualCheckinModal.classList.add('hidden');
+        fetchRealTimeAttendance();
+      } else {
+        feedbackManualCheckin.className = 'mb-3 p-3 rounded-xl text-xs font-semibold text-center bg-red-500/10 text-red-400 border border-red-500/20';
+        feedbackManualCheckin.textContent = result.error?.message || 'Error al registrar asistencia manual.';
+      }
+    } catch(err) {
+      feedbackManualCheckin.className = 'mb-3 p-3 rounded-xl text-xs font-semibold text-center bg-red-500/10 text-red-400 border border-red-500/20';
+      feedbackManualCheckin.textContent = 'Error de conexión con el servidor.';
+    }
+  });
+}
+
 // Polling and timers
 function startSessionPolling() {
   updateControllerView();
