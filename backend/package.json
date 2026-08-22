@@ -1,12 +1,13 @@
 {
-  "name": "app-attendance-backend",
+  "name": "sena-attendance-backend",
   "version": "1.0.0",
-  "description": "Backend MVP for attendance system with Express and SQLite",
+  "description": "Backend API for SENA Attendance System with Express, SQLite and PostgreSQL",
   "type": "module",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node src/server.js"
+    "dev": "node src/server.js",
+    "test": "node tests/integration.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

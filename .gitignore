@@ -1,6 +1,7 @@
 node_modules/
-back/node_modules/
-back/database.sqlite
+backend/node_modules/
+backend/database.sqlite
+*.sqlite
 .env
 .DS_Store
 *.log

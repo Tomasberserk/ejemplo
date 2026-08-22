@@ -56,7 +56,7 @@ const PORT = process.env.PORT || 4000;
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.resolve(__dirname, '../../app')));
+app.use(express.static(path.resolve(__dirname, '../../frontend')));
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.status(200).send('ok'));

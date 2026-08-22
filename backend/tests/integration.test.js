@@ -13,7 +13,7 @@ function generateQrTokenHelper(sessionId, timeOffset = 0) {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = path.resolve(__dirname, 'database.sqlite');
+const dbPath = path.resolve(__dirname, '../database.sqlite');
 
 async function runTests() {
   console.log('--- STARTING MVP INTEGRATION TESTS ---');
