@@ -5,7 +5,7 @@
 ---
 
 ## 🚀 Objetivo del Proyecto
-Reducir el tiempo de toma de lista tradicional en el aula de clase de **~15 minutos a menos de 10 segundos por aprendiz**, automatizando el cómputo de horas lectivas asistidas (de 6h a 0h por retardo) sin interrumpir la clase y garantizando la presencia física mediante códigos QR dinámicos rotativos (HMAC-SHA256), verificación de red local y reconocimiento facial en el navegador.
+Optimizar el tiempo de toma de lista tradicional en el aula de clase de **~15-25 minutos a un proceso fluido de máximo 1 minuto por aprendiz**, automatizando el cómputo de horas lectivas asistidas (de 6h a 0h por retardo) sin interrumpir la clase y garantizando la presencia física mediante códigos QR dinámicos rotativos (HMAC-SHA256), verificación de red local y reconocimiento facial en el navegador.
 
 ---
 

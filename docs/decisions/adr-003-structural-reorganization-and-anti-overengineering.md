@@ -1,4 +1,4 @@
-﻿# ADR 003: Reestructuración Modular y Eliminación de Sobreingeniería
+# ADR 003: Reestructuración Modular y Eliminación de Sobreingeniería
 
 - **Fecha:** 2026-08-22
 - **Estado:** Aceptado
@@ -46,6 +46,6 @@ Se consolida el monorepo en exactamente 4 carpetas con fronteras de responsabili
 
 ## 3. Consecuencias y Beneficios
 
-* **Velocidad de Registro:** El tiempo promedio de marcación de asistencia se reduce de más de 30 segundos a menos de **3 segundos por aprendiz**.
+* **Velocidad de Registro:** El tiempo promedio de marcación de asistencia se reduce a un proceso fluido de **máximo 1 minuto por aprendiz**.
 * **Cero Exclusión Tecnológica:** Ningún estudiante queda fuera de la lista por fallas de cámara, batería o datos móviles gracias a las contingencias de código manual de 6 caracteres y anulación manual (**Override**) del instructor.
 * **Mantenibilidad y Trabajo en Equipo:** Los 3 desarrolladores cuentan con áreas aisladas (`frontend/`, `backend/`, `database/`, `docs/`) para trabajar de forma asíncrona mediante ramas independientes sin riesgo de conflictos de fusión.

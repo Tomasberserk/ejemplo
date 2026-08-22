@@ -58,7 +58,7 @@ Evaluamos cualitativamente el grado de éxito de la solución actual en la resol
 
 | Escenario Evaluado | Nivel de Éxito | Evaluación Cualitativa del Comportamiento |
 |---|---|---|
-| **Caso 1 (Estudiante Puntual)** | ⭐⭐⭐⭐⭐ | Excelente. El registro de asistencia mediante código QR dinámico se efectúa de manera fluida en menos de 10 segundos. |
+| **Caso 1 (Estudiante Puntual)** | ⭐⭐⭐⭐⭐ | Excelente. El registro de asistencia mediante código QR dinámico se efectúa de manera fluida en menos de 1 minuto. |
 | **Caso 3 (Registro Manual)** | ⭐⭐⭐⭐☆ | Bueno. La grilla del docente responde de forma rápida, aunque el botón de override manual podría simplificarse en términos de UX. |
 | **Caso 5 (Fallo de Cámara)** | ⭐⭐⭐⭐⭐ | Excelente. El ingreso mediante el código de 6 caracteres es una contingencia de alta fiabilidad y rapidez. |
 | **Caso 8 (Alumno Nuevo)** | ⭐⭐⭐⭐☆ | Bueno. El flujo de autoregistro funciona, pero requiere que el docente refresque la grilla para visualizar los nuevos ingresos matriculados en caliente. |

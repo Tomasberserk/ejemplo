@@ -59,6 +59,9 @@ Este documento recoge los hallazgos de la fase de **Product Discovery** realizad
 #### D. Desgaste Operativo y Burocrático
 * El instructor debe transcribir manualmente los datos de las hojas de papel a hojas de cálculo o plataformas institucionales, generando retrasos en la detección temprana de deserción.
 
+### 2.3 Objetivo Primordial del Producto
+> **"Diseñar e implementar una solución web ligera, accesible desde el navegador móvil de cualquier aprendiz sin instalación de aplicaciones pesadas, que reduzca el tiempo total de toma de lista de ~15-25 minutos a un proceso ágil de máximo 1 minuto por aprendiz, garantizando la presencia física en el aula mediante mecanismos anti-fraude y calculando automáticamente la puntualidad fraccionada por bloques horarios."**
+
 ---
 
 ## 3. 👥 Arquetipos de Usuario y Mapas de Empatía (User Personas)
@@ -105,7 +108,7 @@ VIAJE          Docente abre pantalla,       Aprendices apuntan su cámara   Doce
 PROPUESTO      hace 1 clic en "Crear Sala". al QR, validan rostro en 2s    toma foto de evidencia.
 (TO-BE)        QR visible en el telón.      y quedan presentes.            Reporte Excel en 1 clic.
                      🟢                            ⭐                              🟢
-               (0 fricción: 5 seg)         (Fluido: < 10 seg/alumno)       (Trazabilidad 100%)
+                (0 fricción: 5 seg)         (Fluido: máx 1 min/alumno)      (Trazabilidad 100%)
 ```
 
 ---
@@ -169,10 +172,19 @@ Siguiendo las mejores prácticas de Product Management (Marty Cagan), evaluamos 
 
 | Tipo de Riesgo | ¿Qué nos preocupaba? | Mitigación Validada en el Discovery | Nivel de Riesgo |
 |---|---|---|---|
+<<<<<<< HEAD
 | **Riesgo de Valor** (*Value Risk*) | Que los instructores encontraran el sistema más engorroso que el papel y lo abandonaran. | La creación de sala toma 1 solo clic y el informe se descarga en Excel listo para entregar. Valor evidente e inmediato. | 🟢 Bajo |
 | **Riesgo de Usabilidad** (*Usability Risk*) | Que los aprendices con celulares viejos no pudieran cargar librerías pesadas de inteligencia artificial. | Biometría facial ejecutada localmente en el cliente con umbral permisivo (45%) y botón de escape manual tras 15s si la luz del aula es mala. | 🟡 Controlado |
 | **Riesgo de Factibilidad** (*Feasibility Risk*) | Que el servidor colapsara con 40 peticiones concurrentes en el mismo segundo al proyectar el QR. | Arquitectura Express ultraligera de proceso único con endpoints JSON optimizados sin dependencias pesadas ni microservicios innecesarios. | 🟢 Bajo |
 | **Riesgo de Viabilidad Legal** (*Viability / Legal Risk*) | Violación de normativas de datos sensibles por captura de fotografías (Ley 1581 de 2012). | Consentimiento explícito obligatorio en el registro, almacenamiento exclusivo para auditoría académica y opción de autosupresión de cuenta en cualquier momento. | 🟢 Controlado |
+=======
+| **RNF-01** | **Rendimiento** | Tiempo de procesamiento de check-in ágil. | Las peticiones de registro de asistencia deben responder en $< 500\,\text{ms}$ en el servidor. El tiempo de marcación total por aprendiz en el aula debe ser de **máximo 1 minuto** (incluyendo escaneo, ingreso y validación). |
+| **RNF-02** | **Cero Fricción / Usabilidad** | Acceso web directo sin instalación de aplicaciones nativas. | El sistema debe funcionar en cualquier navegador móvil moderno (Chrome, Safari, Firefox) consumiendo HTML5 y Tailwind CSS vía CDN, sin requerir descargas desde tiendas de apps. |
+| **RNF-03** | **Arquitectura y Despliegue** | Monolito modular ligero de proceso único. | Frontend y backend deben servirse desde el mismo proceso Node.js en el puerto 4000, eliminando la necesidad de Docker o empaquetadores complejos para pruebas locales. |
+| **RNF-04** | **Persistencia Conmutable** | Portabilidad agnóstica de base de datos. | El sistema debe operar con SQLite en archivo local para desarrollo inmediato y conmutar a PostgreSQL en producción mediante la variable de entorno `DATABASE_URL`. |
+| **RNF-05** | **Seguridad y Privacidad** | Criptografía estándar y protección de datos. | Contraseñas hasheadas con Bcrypt (costo 10), tokens JWT firmados, consultas SQL 100% parametrizadas contra inyección SQL y estricto cumplimiento de la Ley 1581 (Habeas Data). |
+| **RNF-06** | **Diseño e Identidad Visual** | Interfaz Glassmorphism oscura institucional. | Interfaz moderna con tonos oscuros y verde SENA (`#39A900`), tipografía *Outfit* y alertas semánticas de estado de alta legibilidad. |
+>>>>>>> 3f27ad4 (docs(metrics): standardize verification SLA to maximum 1 minute per apprentice across all project docs)
 
 ---
 
@@ -180,6 +192,7 @@ Siguiendo las mejores prácticas de Product Management (Marty Cagan), evaluamos 
 
 Para validar cuantitativamente que la solución resuelve el problema, se definen los siguientes indicadores clave:
 
+<<<<<<< HEAD
 | Métrica | Situación Base (AS-IS) | Meta del Producto (TO-BE) | Impacto Esperado |
 |---|---|---|---|
 | **Tiempo de Toma de Asistencia por Grupo** | 15 - 25 minutos | **$< 2$ minutos totales** ($< 3\text{s}$ por aprendiz) | **Reducción del 90%** en tiempo administrativo. |
@@ -201,3 +214,41 @@ Para validar cuantitativamente que la solución resuelve el problema, se definen
 
 ### Siguiente Paso Recomendado:
 Proceder con la formalización de la **Especificación de Requerimientos de Software (SRS)** y el desarrollo del prototipo funcional bajo la arquitectura monolítica modular definida en el [ADR 001](file:///C:/Users/Aprendiz/.gemini/antigravity/scratch/ejemplo/docs/decisions/adr-001-stack-and-boundaries.md).
+=======
+---
+
+## 7. 🔄 Flujo de Toma de Asistencia (Máximo 1 Minuto)
+
+```
+[ INSTRUCTOR EN EL PROYECTOR ]                     [ APRENDIZ EN EL AULA ]
+           │                                                  │
+ 1. Clic en "Crear Sala"                                      │
+    (Inicia cronómetro de 15m y QR rotativo)                  │
+           │                                                  │
+ 2. Proyecta QR dinámico en pantalla ════════════════════════►│ 3. Escanea con cámara móvil
+           │                                                  │    (o ingresa código manual)
+           │                                                  │
+           │                                                  │ 4. Ingresa documento/clave
+           │                                                  │    (Valida rostro o confirma)
+           │                                                  │
+           │                                                  │ 5. Envía check-in al servidor
+           │◄─────────────────────────────────────────────────┤
+ 6. Polling (cada 5s) actualiza grilla                        │ 6. Recibe confirmación inmediata
+    (Aparece "Tomas Berserk - 6h - Puntual")                  │    ("✅ Asistencia Confirmada - 6h")
+           │                                                  │
+ 7. Cierra sala y adjunta foto evidencia                      │
+```
+
+---
+
+## 8. ✅ Matriz de Trazabilidad y Criterios de Éxito
+
+| Objetivo Inicial | Requerimiento Asociado | Mecanismo de Validación Implementado | Estado de Cumplimiento |
+|---|---|---|---|
+| **Reducir tiempo de toma de lista a máximo 1 min por aprendiz** | RF-05, RF-07, RF-08, RNF-01 | QR dinámico + Check-in en un solo paso con biometría en cliente. | ✅ Cumplido (Máximo 1 min por aprendiz) |
+| **Evitar suplantación remota** | BR-03, RF-05 | Token QR con rotación HMAC de 60s + Check opcional de subred Wi-Fi. | ✅ Implementado y probado |
+| **Cero exclusión tecnológica en el aula** | BR-04, RF-07, RF-09, RF-12 | Código manual de 6 caracteres + Override del docente + Fallback biometría. | ✅ 100% Cobertura de contingencias |
+| **Cálculo justo de horas por retardo** | BR-02, RF-11 | Algoritmo de bloques horarios (6h, 5h, 4h... 0h según hora real). | ✅ Validado en integration tests |
+| **Auditoría institucional sin papel** | RF-17, RF-18, RF-19 | Exportación Excel/PDF + Evidencia fotográfica obligatoria + Panel Coordinador. | ✅ 100% Digital |
+| **Protección de Datos Personales** | BR-08, RF-03, RF-10 | Aceptación de términos Ley 1581 + Opción de autosupresión de cuenta. | ✅ Cumplimiento legal integral |
+>>>>>>> 3f27ad4 (docs(metrics): standardize verification SLA to maximum 1 minute per apprentice across all project docs)

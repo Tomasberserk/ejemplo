@@ -1,4 +1,4 @@
-﻿# Documento de Discovery (Inception & Requisitos del Producto)
+# Documento de Discovery (Inception & Requisitos del Producto)
 
 **Proyecto:** Sistema de Control de Asistencia Académica SENA (`sena-attendance-system`)  
 **Programa de Formación:** Análisis y Desarrollo de Software (ADSO) — Ficha: `3413974`  
@@ -42,10 +42,10 @@ En los ambientes de formación y laboratorios de informática del SENA, el contr
 ## 3. Propósito y Visión del Producto (Product Vision)
 
 ### Declaración de Visión:
-> *"Para los instructores y aprendices del SENA que necesitan un mecanismo rápido y veraz de control de asistencia, **`sena-attendance-system`** es una plataforma web móvil ligera que permite registrar la presencia en menos de 3 segundos mediante códigos QR dinámicos rotativos y cálculo fraccionado de puntualidad, garantizando cero exclusión tecnológica y auditoría institucional transparente."*
+> *"Para los instructores y aprendices del SENA que necesitan un mecanismo rápido y veraz de control de asistencia, **`sena-attendance-system`** es una plataforma web móvil ligera que permite registrar la presencia en un tiempo fluido de **máximo 1 minuto por aprendiz** mediante códigos QR dinámicos rotativos y cálculo fraccionado de puntualidad, garantizando cero exclusión tecnológica y auditoría institucional transparente."*
 
 ### Objetivos Específicos:
-* **Reducir el tiempo de registro** de 20 minutos a menos de **3 segundos por aprendiz**.
+* **Optimizar el tiempo de registro** de ~15-25 minutos a **máximo 1 minuto por aprendiz**.
 * **Eliminar el fraude de asistencia remota** mediante tokens QR dinámicos calculados en ventanas de 60 segundos con firma HMAC.
 * **Calcular automáticamente la puntualidad fraccionada** descontando bloques horarios proporcionales a la hora de llegada tras el margen de gracia de 15 minutos.
 * **Garantizar inclusión total** a través de métodos de contingencia: ingreso con código manual de 6 caracteres y anulación/marcación manual (**Override**) por parte del instructor.
@@ -105,7 +105,7 @@ En los ambientes de formación y laboratorios de informática del SENA, el contr
 
 | ID | Dimensión | Especificación del Requisito No Funcional |
 |---|---|---|
-| **RNF-01** | **Rendimiento y Tiempo de Respuesta** | El procesamiento del registro de asistencia (validación de token, chequeo de horario e inserción en BD) debe completarse en menos de **500 ms**, con un flujo de usuario total inferior a **3 segundos**. |
+| **RNF-01** | **Rendimiento y Tiempo de Respuesta** | El procesamiento del registro de asistencia (validación de token, chequeo de horario e inserción en BD) debe completarse en menos de **500 ms**, con un flujo de usuario total de **máximo 1 minuto por aprendiz** (incluyendo escaneo, captura y validación). |
 | **RNF-02** | **Simplicidad de Despliegue y Mantenibilidad** | El sistema debe funcionar bajo una arquitectura monolítica web en un único proceso Node.js, con persistencia conmutable (SQLite local sin necesidad de Docker / PostgreSQL en la nube). |
 | **RNF-03** | **Seguridad y Criptografía** | Autenticación basada en JSON Web Tokens (JWT con expiración de 24h), contraseñas cifradas con algoritmo Bcrypt (costo 10) y sanitización estricta contra inyecciones XSS y SQL. |
 | **RNF-04** | **Portabilidad y Diseño Responsive** | Interfaz Single Page Application (SPA) construida en HTML5, Vanilla JS y Tailwind CSS, 100% adaptable a pantallas móviles desde 320px de ancho sin requerir compilación nativa. |
